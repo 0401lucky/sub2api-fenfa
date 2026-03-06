@@ -17,6 +17,7 @@
   - `WELFARE_JWT_SECRET`：会话签名密钥，至少 16 位
   - `WELFARE_JWT_EXPIRES_IN`：JWT 过期时间，如 `7d`
   - `WELFARE_COOKIE_SECURE`：生产环境建议设为 `true`
+  - `WELFARE_SESSION_COOKIE_SAME_SITE`：会话 Cookie 的 SameSite 策略；前后端分域部署时建议设为 `none`
 
 - 数据库
   - `DATABASE_URL`：PostgreSQL 连接串

@@ -157,7 +157,7 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
     res.cookie(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
       secure: config.WELFARE_COOKIE_SECURE,
-      sameSite: 'lax',
+      sameSite: config.WELFARE_SESSION_COOKIE_SAME_SITE,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/'
     });

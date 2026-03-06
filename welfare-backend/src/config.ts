@@ -22,6 +22,9 @@ const configSchema = z.object({
   WELFARE_JWT_SECRET: z.string().min(16, 'WELFARE_JWT_SECRET 至少 16 位'),
   WELFARE_JWT_EXPIRES_IN: z.string().default('7d'),
   WELFARE_COOKIE_SECURE: booleanFromString.default(false),
+  WELFARE_SESSION_COOKIE_SAME_SITE: z
+    .enum(['lax', 'strict', 'none'])
+    .default('lax'),
 
   LINUXDO_CLIENT_ID: z.string().min(1, 'LINUXDO_CLIENT_ID 不能为空'),
   LINUXDO_CLIENT_SECRET: z.string().min(1, 'LINUXDO_CLIENT_SECRET 不能为空'),
@@ -58,6 +61,15 @@ if (!parsed.success) {
 }
 
 const raw = parsed.data;
+if (
+  raw.WELFARE_SESSION_COOKIE_SAME_SITE === 'none' &&
+  !raw.WELFARE_COOKIE_SECURE
+) {
+  throw new Error(
+    'WELFARE_SESSION_COOKIE_SAME_SITE=none 时，WELFARE_COOKIE_SECURE 必须为 true'
+  );
+}
+
 const frontendOrigin = normalizeOrigin(raw.WELFARE_FRONTEND_URL, 'WELFARE_FRONTEND_URL');
 const configuredCorsOrigins = raw.WELFARE_CORS_ORIGINS.split(',')
   .map((item) => item.trim())

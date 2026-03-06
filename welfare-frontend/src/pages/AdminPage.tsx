@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Icon } from '../components/Icon';
 import { useAuth } from '../lib/auth';
 import { api, isUnauthorizedError } from '../lib/api';
 import type { AdminSettings, DailyStats, WhitelistItem } from '../types';
@@ -164,7 +165,12 @@ export function AdminPage() {
         {error && <p className="alert error">{error}</p>}
         {message && <p className="alert success">{message}</p>}
 
-        <h2 className="section-title">⚙️ 签到配置</h2>
+        <h2 className="section-title">
+          <span className="section-title-content">
+            <Icon name="settings" className="icon icon-accent" />
+            <span>签到配置</span>
+          </span>
+        </h2>
         {settings && (
           <div className="panel">
             <div className="form-grid">
@@ -209,7 +215,12 @@ export function AdminPage() {
           </div>
         )}
 
-        <h2 className="section-title">📊 30 天签到统计</h2>
+        <h2 className="section-title">
+          <span className="section-title-content">
+            <Icon name="chart" className="icon icon-accent" />
+            <span>30 天签到统计</span>
+          </span>
+        </h2>
         {stats && (
           <div className="panel">
             <div className="admin-stats-summary">
@@ -229,7 +240,12 @@ export function AdminPage() {
           </div>
         )}
 
-        <h2 className="section-title">🛝 管理员白名单</h2>
+        <h2 className="section-title">
+          <span className="section-title-content">
+            <Icon name="shield" className="icon icon-accent" />
+            <span>管理员白名单</span>
+          </span>
+        </h2>
         <div className="panel">
           <div className="form-grid">
             <label className="field">

@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { buildLinuxDoStartUrl } from '../lib/api';
+import { Icon } from '../components/Icon';
 
 export function LoginPage() {
   const { status } = useAuth();
@@ -20,15 +21,30 @@ export function LoginPage() {
 
         <div className="feature-list">
           <div className="feature-item">
-            <strong>🔗 账号联动</strong>
+            <strong>
+              <span className="icon-text">
+                <Icon name="link" className="icon icon-accent" />
+                <span>账号联动</span>
+              </span>
+            </strong>
             <span>按 LinuxDo subject 精准识别 sub2api 用户</span>
           </div>
           <div className="feature-item">
-            <strong>🎁 签到发放</strong>
+            <strong>
+              <span className="icon-text">
+                <Icon name="gift" className="icon icon-accent" />
+                <span>签到发放</span>
+              </span>
+            </strong>
             <span>调用 sub2api 管理接口并附带幂等键</span>
           </div>
           <div className="feature-item">
-            <strong>⚙️ 后台管理</strong>
+            <strong>
+              <span className="icon-text">
+                <Icon name="settings" className="icon icon-accent" />
+                <span>后台管理</span>
+              </span>
+            </strong>
             <span>可配置开关、奖励值、时区与管理员白名单</span>
           </div>
         </div>

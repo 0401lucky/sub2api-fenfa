@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Icon } from '../components/Icon';
 import { useAuth } from '../lib/auth';
 import { api, isUnauthorizedError } from '../lib/api';
 import type { CheckinHistoryItem, CheckinStatus } from '../types';
 
 function checkinStatusText(status: CheckinStatus | null): string {
   if (!status) return '-';
-  if (status.checked_in) return '已签到 ✅';
+  if (status.checked_in) return '已签到';
   if (status.grant_status === 'pending') return '处理中';
   return '未签到';
 }
@@ -122,7 +123,10 @@ export function CheckinPage() {
           <div className="actions">
             {user?.is_admin && (
               <Link to="/admin" className="button ghost">
-                ⚙️ 后台管理
+                <span className="button-content">
+                  <Icon name="settings" className="icon" size={16} />
+                  <span>后台管理</span>
+                </span>
               </Link>
             )}
             <button className="button" onClick={handleLogout}>
@@ -157,7 +161,14 @@ export function CheckinPage() {
         <div className="row section-bar">
           <h2 className="section-title">签到操作</h2>
           <button className="button primary" disabled={!canCheckin} onClick={handleCheckin}>
-            {submitting ? '签到中...' : '🎁 立即签到'}
+            {submitting ? (
+              '签到中...'
+            ) : (
+              <span className="button-content">
+                <Icon name="gift" className="icon" size={16} />
+                <span>立即签到</span>
+              </span>
+            )}
           </button>
         </div>
 

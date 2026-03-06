@@ -285,6 +285,31 @@ h3 {
   line-height: 1.5;
 }
 
+.icon {
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+.icon-accent {
+  color: var(--coral);
+}
+
+.icon-text,
+.button-content,
+.section-title-content {
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-text,
+.button-content {
+  gap: 8px;
+}
+
+.section-title-content {
+  gap: 10px;
+}
+
 /* ─── 按钮系统 ─── */
 
 .button {

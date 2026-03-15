@@ -27,7 +27,8 @@ export function createApp() {
         }
         callback(new Error(`${CORS_ERROR_PREFIX}${origin}`));
       },
-      credentials: true
+      credentials: true,
+      maxAge: 600
     })
   );
 

@@ -56,14 +56,10 @@ export function AdminPage() {
     setLoading(true);
     setError('');
     try {
-      const [settingsResp, statsResp, whitelistResp] = await Promise.all([
-        api.getAdminSettings(),
-        api.getDailyStats(30),
-        api.listWhitelist()
-      ]);
-      setSettings(settingsResp);
-      setStats(statsResp);
-      setWhitelist(whitelistResp);
+      const overview = await api.getAdminOverview();
+      setSettings(overview.settings);
+      setStats(overview.stats);
+      setWhitelist(overview.whitelist);
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await redirectToLogin();
@@ -125,13 +121,16 @@ export function AdminPage() {
     setError('');
     setMessage('');
     try {
-      await api.addWhitelist({
+      const created = await api.addWhitelist({
         linuxdo_subject: newSubject.trim(),
         notes: newNotes.trim() || undefined
       });
       setNewSubject('');
       setNewNotes('');
-      setWhitelist(await api.listWhitelist());
+      setWhitelist((current) => {
+        const filtered = current.filter((item) => item.id !== created.id);
+        return [...filtered, created].sort((a, b) => a.id - b.id);
+      });
       setMessage('已添加管理员白名单');
     } catch (err) {
       if (isUnauthorizedError(err)) {
@@ -147,7 +146,7 @@ export function AdminPage() {
     setMessage('');
     try {
       await api.removeWhitelist(id);
-      setWhitelist(await api.listWhitelist());
+      setWhitelist((current) => current.filter((item) => item.id !== id));
       setMessage('已删除白名单');
     } catch (err) {
       if (isUnauthorizedError(err)) {

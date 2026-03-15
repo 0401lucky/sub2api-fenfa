@@ -1,70 +1,68 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 
-function parseHash(hash: string): Record<string, string> {
-  const normalized = hash.startsWith('#') ? hash.slice(1) : hash;
-  const params = new URLSearchParams(normalized);
+function parseParams(...inputs: string[]): Record<string, string> {
   const out: Record<string, string> = {};
-  params.forEach((value, key) => {
-    out[key] = value;
-  });
+
+  for (const input of inputs) {
+    const normalized = input.startsWith('#') || input.startsWith('?')
+      ? input.slice(1)
+      : input;
+    const params = new URLSearchParams(normalized);
+    params.forEach((value, key) => {
+      out[key] = value;
+    });
+  }
+
   return out;
 }
 
 export function AuthCallbackPage() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { status, user } = useAuth();
   const [message, setMessage] = useState('正在处理登录回调...');
   const [isError, setIsError] = useState(false);
+  const params = useMemo(
+    () => parseParams(window.location.hash, window.location.search),
+    []
+  );
+  const redirect = params.redirect || '/checkin';
+  const error = params.error;
+  const detail = params.detail;
 
   useEffect(() => {
-    const params = parseHash(window.location.hash);
-    const error = params.error;
-    const redirect = params.redirect || '/checkin';
-
     if (error) {
       setIsError(true);
-      setMessage(`登录失败：${params.detail || error}`);
+      setMessage(`登录失败：${detail || error}`);
       const timeout = window.setTimeout(() => {
         navigate('/login', { replace: true });
       }, 1500);
       return () => window.clearTimeout(timeout);
     }
 
-    let cancelled = false;
+    if (status === 'loading') {
+      setIsError(false);
+      setMessage('正在处理登录回调...');
+      return;
+    }
 
-    void refresh()
-      .then((user) => {
-        if (cancelled) {
-          return;
-        }
-        if (!user) {
-          setIsError(true);
-          setMessage('登录失败：未建立有效会话');
-          window.setTimeout(() => {
-            navigate('/login', { replace: true });
-          }, 1500);
-          return;
-        }
-        setMessage('登录成功，正在跳转...');
-        navigate(redirect, { replace: true });
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setIsError(true);
-        setMessage('登录失败：会话校验未通过，请稍后重试');
-        window.setTimeout(() => {
-          navigate('/login', { replace: true });
-        }, 1500);
-      });
+    if (status === 'authenticated' && user) {
+      setIsError(false);
+      setMessage('登录成功，正在跳转...');
+      navigate(redirect, { replace: true });
+      return;
+    }
 
+    setIsError(true);
+    setMessage('登录失败：未建立有效会话');
+    const timeout = window.setTimeout(() => {
+      navigate('/login', { replace: true });
+    }, 1500);
     return () => {
-      cancelled = true;
+      window.clearTimeout(timeout);
     };
-  }, [navigate, refresh]);
+  }, [detail, error, navigate, redirect, status, user]);
 
   return (
     <div className="page page-center">

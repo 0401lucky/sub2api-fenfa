@@ -58,6 +58,24 @@ export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireAdmin);
 
+adminRouter.get('/overview', asyncHandler(async (_req, res) => {
+  const [settings, stats, whitelist] = await Promise.all([
+    checkinService.getAdminSettings(),
+    checkinService.getAdminDailyStats(30),
+    welfareRepository.listAdminWhitelist()
+  ]);
+
+  ok(res, {
+    settings: {
+      checkin_enabled: settings.checkinEnabled,
+      daily_reward_balance: settings.dailyRewardBalance,
+      timezone: settings.timezone
+    },
+    stats,
+    whitelist
+  });
+}));
+
 adminRouter.get('/settings', asyncHandler(async (_req, res) => {
   const settings = await checkinService.getAdminSettings();
   ok(res, {

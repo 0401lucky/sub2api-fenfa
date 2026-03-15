@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from 'react';
@@ -25,13 +26,31 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
+  const refreshPromiseRef = useRef<Promise<SessionUser | null> | null>(null);
 
   const refresh = useCallback(async (): Promise<SessionUser | null> => {
+    if (!refreshPromiseRef.current) {
+      refreshPromiseRef.current = (async () => {
+        try {
+          const currentUser = await api.getMe();
+          setUser(currentUser);
+          setStatus('authenticated');
+          return currentUser;
+        } catch (error) {
+          if (isUnauthorizedError(error)) {
+            setUser(null);
+            setStatus('unauthenticated');
+            return null;
+          }
+          throw error;
+        } finally {
+          refreshPromiseRef.current = null;
+        }
+      })();
+    }
+
     try {
-      const currentUser = await api.getMe();
-      setUser(currentUser);
-      setStatus('authenticated');
-      return currentUser;
+      return await refreshPromiseRef.current;
     } catch (error) {
       if (isUnauthorizedError(error)) {
         setUser(null);

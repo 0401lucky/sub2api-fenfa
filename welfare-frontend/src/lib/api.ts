@@ -2,6 +2,7 @@ import type {
   AdminCheckinItem,
   AdminCheckinList,
   AdminCheckinQuery,
+  AdminOverview,
   AdminSettings,
   ApiEnvelope,
   CheckinHistoryItem,
@@ -28,12 +29,26 @@ export function isUnauthorizedError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 401;
 }
 
+function shouldAttachJsonContentType(init: RequestInit, headers: Headers): boolean {
+  if (headers.has('Content-Type')) {
+    return false;
+  }
+
+  if (init.body == null) {
+    return false;
+  }
+
+  return !(init.body instanceof FormData);
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
   const headers = new Headers(init.headers ?? {});
-  headers.set('Content-Type', 'application/json');
+  if (shouldAttachJsonContentType(init, headers)) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
@@ -41,14 +56,37 @@ async function request<T>(
     credentials: 'include'
   });
 
-  const body = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || body.code !== 0) {
+  const rawBody = await response.text();
+  let body: ApiEnvelope<T> | null = null;
+
+  if (rawBody) {
+    try {
+      body = JSON.parse(rawBody) as ApiEnvelope<T>;
+    } catch {
+      throw new ApiError(response.status, response.status, rawBody || '服务响应格式无效');
+    }
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      body?.code ?? response.status,
+      body?.detail || body?.message || rawBody || '请求失败'
+    );
+  }
+
+  if (!body) {
+    throw new ApiError(response.status, response.status, '服务响应为空');
+  }
+
+  if (body.code !== 0) {
     throw new ApiError(
       response.status,
       body.code,
       body.detail || body.message || '请求失败'
     );
   }
+
   return body.data;
 }
 
@@ -64,6 +102,7 @@ export const api = {
       grant_status: 'success';
     }>('/api/checkin', { method: 'POST' }),
   getCheckinHistory: () => request<CheckinHistoryItem[]>('/api/checkin/history'),
+  getAdminOverview: () => request<AdminOverview>('/api/admin/overview'),
   getAdminSettings: () => request<AdminSettings>('/api/admin/settings'),
   updateAdminSettings: (payload: Partial<AdminSettings>) =>
     request<AdminSettings>('/api/admin/settings', {

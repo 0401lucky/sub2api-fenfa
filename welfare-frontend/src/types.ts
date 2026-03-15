@@ -54,6 +54,12 @@ export interface DailyStats {
   points: DailyStatPoint[];
 }
 
+export interface AdminOverview {
+  settings: AdminSettings;
+  stats: DailyStats;
+  whitelist: WhitelistItem[];
+}
+
 export interface AdminCheckinItem {
   id: number;
   sub2apiUserId: number;

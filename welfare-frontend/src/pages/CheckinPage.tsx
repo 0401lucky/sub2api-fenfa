@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../lib/auth';
 import { api, isUnauthorizedError } from '../lib/api';
-import type { CheckinHistoryItem, CheckinStatus } from '../types';
+import type { CheckinHistoryItem, CheckinStatus, RedeemHistoryItem } from '../types';
 
 function checkinStatusText(status: CheckinStatus | null): string {
   if (!status) return '-';
@@ -12,7 +12,7 @@ function checkinStatusText(status: CheckinStatus | null): string {
   return '未签到';
 }
 
-function renderGrantTag(status: CheckinHistoryItem['grant_status']) {
+function renderGrantTag(status: 'success' | 'pending' | 'failed') {
   const label = status === 'success' ? '成功' : status === 'pending' ? '处理中' : '失败';
   return <span className={`status-tag ${status}`}>{label}</span>;
 }
@@ -32,8 +32,11 @@ export function CheckinPage() {
   const { user, logout } = useAuth();
   const [status, setStatus] = useState<CheckinStatus | null>(null);
   const [history, setHistory] = useState<CheckinHistoryItem[]>([]);
+  const [redeemHistory, setRedeemHistory] = useState<RedeemHistoryItem[]>([]);
+  const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [redeemSubmitting, setRedeemSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -46,12 +49,14 @@ export function CheckinPage() {
     setLoading(true);
     setError('');
     try {
-      const [currentStatus, records] = await Promise.all([
+      const [currentStatus, records, redeemRecords] = await Promise.all([
         api.getCheckinStatus(),
-        api.getCheckinHistory()
+        api.getCheckinHistory(),
+        api.getRedeemHistory()
       ]);
       setStatus(currentStatus);
       setHistory(records);
+      setRedeemHistory(redeemRecords);
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await redirectToLogin();
@@ -72,6 +77,11 @@ export function CheckinPage() {
     return status.checkin_enabled && status.can_checkin && !submitting;
   }, [status, submitting]);
 
+  const canRedeem = useMemo(
+    () => redeemCodeInput.trim() !== '' && !redeemSubmitting,
+    [redeemCodeInput, redeemSubmitting]
+  );
+
   async function handleCheckin() {
     if (!canCheckin) return;
     setSubmitting(true);
@@ -91,6 +101,33 @@ export function CheckinPage() {
       setError(err instanceof Error ? err.message : '签到失败');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRedeem() {
+    if (!canRedeem) return;
+    setRedeemSubmitting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await api.redeemCode({
+        code: redeemCodeInput.trim()
+      });
+      setRedeemCodeInput('');
+      setSuccess(
+        `兑换成功，${result.title} 已发放 ${result.reward_balance}，当前余额 ${
+          result.new_balance ?? '未知'
+        }`
+      );
+      await loadAll();
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await redirectToLogin();
+        return;
+      }
+      setError(err instanceof Error ? err.message : '兑换失败');
+    } finally {
+      setRedeemSubmitting(false);
     }
   }
 
@@ -168,6 +205,9 @@ export function CheckinPage() {
           </div>
         )}
 
+        {success && <p className="alert success">{success}</p>}
+        {error && <p className="alert error">{error}</p>}
+
         <div className="row section-bar">
           <h2 className="section-title">签到操作</h2>
           <button className="button primary" disabled={!canCheckin} onClick={handleCheckin}>
@@ -182,8 +222,33 @@ export function CheckinPage() {
           </button>
         </div>
 
-        {success && <p className="alert success">{success}</p>}
-        {error && <p className="alert error">{error}</p>}
+        <h2 className="section-title">
+          <span className="section-title-content">
+            <Icon name="shield" className="icon icon-accent" />
+            <span>兑换码兑换</span>
+          </span>
+        </h2>
+        <div className="panel">
+          <div className="redeem-form-row">
+            <label className="field redeem-field">
+              <span>兑换码</span>
+              <input
+                type="text"
+                value={redeemCodeInput}
+                maxLength={64}
+                placeholder="输入兑换码后直接兑换额度"
+                onChange={(event) => setRedeemCodeInput(event.target.value)}
+              />
+            </label>
+            <button
+              className="button primary redeem-action"
+              disabled={!canRedeem}
+              onClick={handleRedeem}
+            >
+              {redeemSubmitting ? '兑换中...' : '立即兑换'}
+            </button>
+          </div>
+        </div>
 
         <h2 className="section-title">签到历史</h2>
         <div className="list">
@@ -202,6 +267,28 @@ export function CheckinPage() {
               </span>
               <span className="muted" style={{ fontSize: 13 }}>
                 {item.grant_error || '发放成功'}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <h2 className="section-title">兑换记录</h2>
+        <div className="list">
+          {redeemHistory.length === 0 && <p className="muted">暂无兑换记录</p>}
+          {redeemHistory.map((item) => (
+            <div key={item.id} className="list-item">
+              <div className="stack">
+                <strong>{item.redeem_title}</strong>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  兑换码 {item.redeem_code}
+                </span>
+              </div>
+              {renderGrantTag(item.grant_status)}
+              <span className="muted" style={{ fontSize: 13 }}>
+                发放 {item.reward_balance}
+              </span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                {item.grant_error || new Date(item.created_at).toLocaleString()}
               </span>
             </div>
           ))}

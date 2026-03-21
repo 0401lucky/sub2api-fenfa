@@ -639,6 +639,7 @@ h3 {
 .field input[type='text'],
 .field input[type='number'],
 .field input[type='date'],
+.field input[type='datetime-local'],
 .field select {
   width: 100%;
   border-radius: var(--radius-sm);
@@ -685,6 +686,21 @@ h3 {
 
 .form-actions {
   margin-top: 24px;
+}
+
+.redeem-form-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.redeem-field {
+  flex: 1 1 320px;
+}
+
+.redeem-action {
+  min-width: 160px;
 }
 
 /* ─── 回馈提示条 (.alert) ─── */
@@ -819,7 +835,22 @@ h3 {
   grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 0.95fr) minmax(100px, 0.7fr) minmax(150px, 0.95fr) minmax(220px, 1.5fr) auto;
 }
 
+.admin-redeem-code-item {
+  grid-template-columns: minmax(180px, 1.35fr) minmax(110px, 0.75fr) minmax(120px, 0.9fr) minmax(120px, 0.85fr) minmax(180px, 1.1fr) auto;
+}
+
+.admin-redeem-claim-item {
+  grid-template-columns: minmax(180px, 1.25fr) minmax(160px, 1fr) minmax(120px, 0.8fr) minmax(150px, 0.95fr) minmax(220px, 1.35fr) auto;
+}
+
 .admin-checkin-meta {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+
+.admin-redeem-meta {
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink-2);
@@ -938,7 +969,9 @@ h3 {
   }
 
   .list-item,
-  .admin-checkin-item {
+  .admin-checkin-item,
+  .admin-redeem-code-item,
+  .admin-redeem-claim-item {
     grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
@@ -960,9 +993,16 @@ h3 {
   }
 
   .list-item,
-  .admin-checkin-item {
+  .admin-checkin-item,
+  .admin-redeem-code-item,
+  .admin-redeem-claim-item {
     grid-template-columns: 1fr;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .redeem-form-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .topbar {

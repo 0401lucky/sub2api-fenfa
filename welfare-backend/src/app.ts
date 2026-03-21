@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { authRouter } from './routes/auth-routes.js';
 import { checkinRouter } from './routes/checkin-routes.js';
 import { adminRouter } from './routes/admin-routes.js';
+import { redeemRouter } from './routes/redeem-routes.js';
 import { ok } from './utils/response.js';
 
 const CORS_ERROR_PREFIX = 'CORS_ORIGIN_NOT_ALLOWED:';
@@ -41,6 +42,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/checkin', checkinRouter);
+  app.use('/api/redeem-codes', redeemRouter);
   app.use('/api/admin', adminRouter);
 
   app.use((req, res) => {

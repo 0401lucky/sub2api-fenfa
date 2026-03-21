@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { AdminRedeemCodesPanel } from '../components/AdminRedeemCodesPanel';
+import { AdminRedeemClaimsPanel } from '../components/AdminRedeemClaimsPanel';
 import { useAuth } from '../lib/auth';
 import { api, isUnauthorizedError } from '../lib/api';
 import type {
@@ -368,6 +370,18 @@ export function AdminPage() {
             </div>
           </div>
         )}
+
+        <AdminRedeemCodesPanel
+          onUnauthorized={redirectToLogin}
+          onError={setError}
+          onSuccess={setMessage}
+        />
+
+        <AdminRedeemClaimsPanel
+          onUnauthorized={redirectToLogin}
+          onError={setError}
+          onSuccess={setMessage}
+        />
 
         <h2 className="section-title">
           <span className="section-title-content">

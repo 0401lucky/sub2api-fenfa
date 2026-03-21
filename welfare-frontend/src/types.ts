@@ -35,6 +35,17 @@ export interface CheckinHistoryItem {
   created_at: string;
 }
 
+export interface RedeemHistoryItem {
+  id: number;
+  redeem_code_id: number;
+  redeem_code: string;
+  redeem_title: string;
+  reward_balance: number;
+  grant_status: 'pending' | 'success' | 'failed';
+  grant_error: string;
+  created_at: string;
+}
+
 export interface AdminSettings {
   checkin_enabled: boolean;
   daily_reward_balance: number;
@@ -90,6 +101,55 @@ export interface AdminCheckinQuery {
   date_to?: string;
   grant_status?: 'pending' | 'success' | 'failed';
   subject?: string;
+}
+
+export interface AdminRedeemCodeItem {
+  id: number;
+  code: string;
+  title: string;
+  rewardBalance: number;
+  maxClaims: number;
+  claimedCount: number;
+  remainingClaims: number;
+  enabled: boolean;
+  expiresAt: string | null;
+  isExpired: boolean;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminRedeemClaimItem {
+  id: number;
+  redeemCodeId: number;
+  redeemCode: string;
+  redeemTitle: string;
+  sub2apiUserId: number;
+  linuxdoSubject: string;
+  syntheticEmail: string;
+  rewardBalance: number;
+  idempotencyKey: string;
+  grantStatus: 'pending' | 'success' | 'failed';
+  grantError: string;
+  sub2apiRequestId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminRedeemClaimList {
+  items: AdminRedeemClaimItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
+export interface AdminRedeemClaimQuery {
+  page?: number;
+  page_size?: number;
+  grant_status?: 'pending' | 'success' | 'failed';
+  subject?: string;
+  code?: string;
 }
 
 export interface WhitelistItem {

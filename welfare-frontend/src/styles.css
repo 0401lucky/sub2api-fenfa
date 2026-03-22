@@ -1042,7 +1042,6 @@ h3 {
 .admin-dashboard-main {
   position: relative;
   border-radius: 20px;
-  overflow: hidden;
 }
 
 .admin-dashboard-sidebar {
@@ -1056,6 +1055,8 @@ h3 {
   color: var(--ink-0);
   min-height: calc(100vh - 36px);
   max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 24px;

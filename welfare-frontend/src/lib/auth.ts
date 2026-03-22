@@ -13,6 +13,7 @@ import type { SessionUser } from '../types';
 import { api, isUnauthorizedError } from './api';
 import {
   clearStoredSessionToken,
+  getStoredSessionToken,
   SESSION_TOKEN_STORAGE_KEY
 } from './session-token';
 
@@ -40,22 +41,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refreshPromiseRef = useRef<Promise<SessionUser | null> | null>(null);
+  const refreshTokenRef = useRef<string | null>(null);
+  const refreshRequestIdRef = useRef(0);
 
   const refresh = useCallback(async (): Promise<SessionUser | null> => {
-    if (!refreshPromiseRef.current) {
+    function getLatestRefreshResult(
+      fallback: SessionUser | null
+    ): Promise<SessionUser | null> {
+      return refreshPromiseRef.current ?? Promise.resolve(fallback);
+    }
+
+    function startRefresh(): Promise<SessionUser | null> {
+      const requestId = refreshRequestIdRef.current + 1;
+      const requestToken = getStoredSessionToken();
+
+      refreshRequestIdRef.current = requestId;
+      refreshTokenRef.current = requestToken;
       setError(null);
       setStatus((current) => (current === 'authenticated' ? current : 'loading'));
 
       refreshPromiseRef.current = (async () => {
         try {
           const currentUser = await api.getMe();
+          if (refreshRequestIdRef.current !== requestId) {
+            return await getLatestRefreshResult(currentUser);
+          }
+
           setUser(currentUser);
           setError(null);
           setStatus('authenticated');
           return currentUser;
         } catch (error) {
+          if (refreshRequestIdRef.current !== requestId) {
+            return await getLatestRefreshResult(null);
+          }
+
           if (isUnauthorizedError(error)) {
-            clearStoredSessionToken();
+            const latestToken = getStoredSessionToken();
+            if (latestToken && latestToken !== requestToken) {
+              return await startRefresh();
+            }
+
+            if (requestToken) {
+              clearStoredSessionToken();
+            }
             setUser(null);
             setError(null);
             setStatus('unauthenticated');
@@ -66,12 +95,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setStatus('error');
           throw error;
         } finally {
-          refreshPromiseRef.current = null;
+          if (refreshRequestIdRef.current === requestId) {
+            refreshPromiseRef.current = null;
+            refreshTokenRef.current = null;
+          }
         }
       })();
+
+      return refreshPromiseRef.current;
     }
 
-    return await refreshPromiseRef.current;
+    const latestToken = getStoredSessionToken();
+    if (refreshPromiseRef.current && refreshTokenRef.current === latestToken) {
+      return await refreshPromiseRef.current;
+    }
+
+    return await startRefresh();
   }, []);
 
   const logout = useCallback(async () => {

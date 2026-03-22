@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from './auth';
 import { SESSION_TOKEN_STORAGE_KEY } from './session-token';
@@ -16,11 +16,14 @@ vi.mock('./api', () => ({
 }));
 
 function AuthProbe() {
-  const { status, error } = useAuth();
+  const { status, error, refresh, user } = useAuth();
 
   return (
     <div>
-      {status}|{error ?? '-'}
+      <div data-testid="auth-state">
+        {status}|{error ?? '-'}|{user?.linuxdo_subject ?? '-'}
+      </div>
+      <button onClick={() => void refresh()}>refresh</button>
     </div>
   );
 }
@@ -42,7 +45,7 @@ describe('AuthProvider', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('error|backend down')).toBeInTheDocument();
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('error|backend down|-');
     });
   });
 
@@ -59,8 +62,57 @@ describe('AuthProvider', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('unauthenticated|-')).toBeInTheDocument();
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('unauthenticated|-|-');
     });
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBeNull();
+  });
+
+  it('会忽略旧 token 的 401，并使用最新 token 完成会话恢复', async () => {
+    let rejectFirstRequest: ((reason?: unknown) => void) | undefined;
+
+    getMeMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirstRequest = reject;
+          })
+      )
+      .mockResolvedValueOnce({
+        sub2api_user_id: 1,
+        linuxdo_subject: 'fresh-user',
+        synthetic_email: 'fresh-user@linuxdo-connect.invalid',
+        username: 'fresh-user',
+        avatar_url: null,
+        is_admin: false
+      });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(getMeMock).toHaveBeenCalledTimes(1);
+    });
+
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, 'fresh-token');
+    fireEvent.click(screen.getByRole('button', { name: 'refresh' }));
+
+    await waitFor(() => {
+      expect(getMeMock).toHaveBeenCalledTimes(2);
+    });
+
+    if (!rejectFirstRequest) {
+      throw new Error('首个请求未正确进入挂起状态');
+    }
+    rejectFirstRequest({ status: 401 });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent(
+        'authenticated|-|fresh-user'
+      );
+    });
+    expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('fresh-token');
   });
 });

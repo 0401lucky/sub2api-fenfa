@@ -11,6 +11,10 @@ import {
 } from 'react';
 import type { SessionUser } from '../types';
 import { api, isUnauthorizedError } from './api';
+import {
+  clearStoredSessionToken,
+  SESSION_TOKEN_STORAGE_KEY
+} from './session-token';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'error';
 
@@ -51,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return currentUser;
         } catch (error) {
           if (isUnauthorizedError(error)) {
+            clearStoredSessionToken();
             setUser(null);
             setError(null);
             setStatus('unauthenticated');
@@ -70,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    clearStoredSessionToken();
     try {
       await api.logout();
     } catch {
@@ -84,6 +90,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh().catch((error) => {
       console.error('[auth] 刷新会话失败', error);
     });
+  }, [refresh]);
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== SESSION_TOKEN_STORAGE_KEY) {
+        return;
+      }
+
+      void refresh().catch((error) => {
+        console.error('[auth] 同步跨标签页会话失败', error);
+      });
+    }
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
   }, [refresh]);
 
   const value = useMemo<AuthContextValue>(

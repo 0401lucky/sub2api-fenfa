@@ -2,16 +2,17 @@ import type { NextFunction, Request, Response } from 'express';
 import { sessionService } from '../services/session-service.js';
 
 function extractToken(req: Request): string | null {
+  const cookieToken = req.cookies?.welfare_token;
+  if (typeof cookieToken === 'string' && cookieToken.trim() !== '') {
+    return cookieToken;
+  }
+
   const authHeader = req.header('Authorization')?.trim();
   if (authHeader) {
     const [scheme, token] = authHeader.split(/\s+/);
     if (scheme?.toLowerCase() === 'bearer' && token) {
       return token;
     }
-  }
-  const cookieToken = req.cookies?.welfare_token;
-  if (typeof cookieToken === 'string' && cookieToken.trim() !== '') {
-    return cookieToken;
   }
   return null;
 }
@@ -38,4 +39,3 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     });
   }
 }
-

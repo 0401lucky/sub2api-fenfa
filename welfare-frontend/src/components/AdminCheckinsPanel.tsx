@@ -28,6 +28,9 @@ interface AdminCheckinsPanelProps {
   onResetFilters: () => void;
   retryingId: number | null;
   onRetryCheckin: (id: number) => Promise<void>;
+  batchRetrying: boolean;
+  batchRetryProgress: { done: number; total: number; successCount: number; failCount: number };
+  onRetryAllFailed: () => Promise<void>;
   onChangePage: (nextPage: number) => void;
 }
 
@@ -52,6 +55,9 @@ export function AdminCheckinsPanel({
   onResetFilters,
   retryingId,
   onRetryCheckin,
+  batchRetrying,
+  batchRetryProgress,
+  onRetryAllFailed,
   onChangePage
 }: AdminCheckinsPanelProps) {
   return (
@@ -146,6 +152,32 @@ export function AdminCheckinsPanel({
             <span>签到明细</span>
           </span>
         </h2>
+
+        {/* 一键补发区域 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+          <button
+            className="button danger"
+            onClick={() => void onRetryAllFailed()}
+            disabled={batchRetrying}
+          >
+            {batchRetrying ? `补发中... (${batchRetryProgress.done}/${batchRetryProgress.total})` : '⚙ 一键补发所有失败'}
+          </button>
+          {batchRetrying && batchRetryProgress.total > 0 && (
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <div className="admin-progress-track">
+                <span
+                  style={{
+                    width: `${(batchRetryProgress.done / batchRetryProgress.total) * 100}%`,
+                    transition: 'width 0.3s ease'
+                  }}
+                />
+              </div>
+              <span className="muted" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                成功 {batchRetryProgress.successCount}、失败 {batchRetryProgress.failCount}、剩余 {batchRetryProgress.total - batchRetryProgress.done}
+              </span>
+            </div>
+          )}
+        </div>
         <div className="form-grid admin-checkin-filters">
           <label className="field">
             <span>LinuxDo Subject</span>

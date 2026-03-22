@@ -86,6 +86,7 @@ npm test
 
 - `GET /api/auth/linuxdo/start`：跳转 LinuxDo 登录
 - `GET /api/auth/linuxdo/callback`：处理 OAuth 回调，写入 `HttpOnly Cookie` 会话
+- `POST /api/auth/session-handoff/exchange`：把前端回调页拿到的一次性交接码换成 session token
 - `GET /api/auth/me`：返回当前会话信息，包含 `is_admin`
 - `POST /api/auth/logout`：退出登录
 

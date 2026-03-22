@@ -38,8 +38,8 @@ npm run preview
 
 ## 鉴权策略
 
-- 不再把会话 token 存进 `localStorage`
-- 仅使用后端设置的 `HttpOnly Cookie` 维持登录态
+- 默认仍使用后端设置的 `HttpOnly Cookie` 维持登录态
+- 当前端与后端跨站部署时，会在 OAuth 回调后通过一次性交接码换取 session token，并保存到浏览器本地存储，后续请求改走 `Authorization: Bearer`
 - 前端通过 `GET /api/auth/me` 刷新当前会话状态
 - 所有 API 请求统一携带 `credentials: include`
 - 遇到 `401` 时会自动回到登录页

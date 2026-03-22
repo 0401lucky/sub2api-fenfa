@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   isSafeLinuxDoSubject,
   signOAuthState,
+  signSessionHandoff,
   toSyntheticEmail,
-  verifyOAuthState
+  verifyOAuthState,
+  verifySessionHandoff
 } from './oauth.js';
 
 describe('oauth utils', () => {
@@ -34,5 +36,19 @@ describe('oauth utils', () => {
     expect(parsed?.codeVerifier).toBe('verifier');
     expect(parsed?.redirectPath).toBe('/checkin');
   });
-});
 
+  it('signs and verifies session handoff', () => {
+    const secret = '01234567890123456789';
+    const token = signSessionHandoff(
+      {
+        token: 'session-token',
+        redirectPath: '/admin',
+        issuedAt: 1
+      },
+      secret
+    );
+    const parsed = verifySessionHandoff(token, secret);
+    expect(parsed?.token).toBe('session-token');
+    expect(parsed?.redirectPath).toBe('/admin');
+  });
+});

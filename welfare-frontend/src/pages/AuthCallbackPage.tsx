@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
+import { storeSessionToken } from '../lib/session-token';
 
 function parseParams(...inputs: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -20,19 +22,74 @@ function parseParams(...inputs: string[]): Record<string, string> {
 
 export function AuthCallbackPage() {
   const navigate = useNavigate();
-  const { status, user, error: authError } = useAuth();
+  const { status, user, error: authError, refresh } = useAuth();
   const [message, setMessage] = useState('正在处理登录回调...');
   const [isError, setIsError] = useState(false);
+  const handoffHandledRef = useRef(false);
   const params = useMemo(
     () => parseParams(window.location.hash, window.location.search),
     []
   );
+  const handoff = params.handoff;
   const redirect = params.redirect || '/checkin';
   const error = params.error;
   const detail = params.detail;
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (handoff && !handoffHandledRef.current) {
+      handoffHandledRef.current = true;
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${window.location.search}`
+      );
+      setIsError(false);
+      setMessage('登录成功，正在建立会话...');
+
+      void (async () => {
+        try {
+          const result = await api.exchangeSessionHandoff(handoff);
+          if (cancelled) {
+            return;
+          }
+
+          storeSessionToken(result.session_token);
+          await refresh();
+          if (cancelled) {
+            return;
+          }
+
+          setMessage('登录成功，正在跳转...');
+          navigate(result.redirect || redirect, { replace: true });
+        } catch (exchangeError) {
+          if (cancelled) {
+            return;
+          }
+
+          setIsError(true);
+          setMessage(
+            `登录状态校验失败：${
+              exchangeError instanceof Error
+                ? exchangeError.message
+                : '服务暂时不可用，请稍后重试'
+            }`
+          );
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (error) {
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${window.location.search}`
+      );
       setIsError(true);
       setMessage(`登录失败：${detail || error}`);
       const timeout = window.setTimeout(() => {
@@ -68,7 +125,7 @@ export function AuthCallbackPage() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [authError, detail, error, navigate, redirect, status, user]);
+  }, [authError, detail, error, handoff, navigate, redirect, refresh, status, user]);
 
   return (
     <div className="page page-center">

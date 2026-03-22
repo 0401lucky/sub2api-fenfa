@@ -99,6 +99,8 @@ export function AdminPage() {
   const [checkinsLoading, setCheckinsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [batchRetrying, setBatchRetrying] = useState(false);
+  const [batchRetryProgress, setBatchRetryProgress] = useState({ done: 0, total: 0, successCount: 0, failCount: 0 });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -298,6 +300,72 @@ export function AdminPage() {
     }
   }
 
+  async function retryAllFailed() {
+    setBatchRetrying(true);
+    setError('');
+    setMessage('');
+    setBatchRetryProgress({ done: 0, total: 0, successCount: 0, failCount: 0 });
+
+    try {
+      // 递归拉取所有失败签到记录（最多 200 条/页）
+      const allFailed: AdminCheckinItem[] = [];
+      let page = 1;
+      while (true) {
+        const resp = await api.listAdminCheckins({ page, page_size: 200, grant_status: 'failed' });
+        allFailed.push(...resp.items);
+        if (page >= resp.pages) break;
+        page++;
+      }
+
+      if (allFailed.length === 0) {
+        setMessage('当前没有需要补发的失败签到记录');
+        setBatchRetrying(false);
+        return;
+      }
+
+      setBatchRetryProgress({ done: 0, total: allFailed.length, successCount: 0, failCount: 0 });
+
+      let successCount = 0;
+      let failCount = 0;
+
+      // 串行逐条补发，避免并发压垮后端
+      for (let i = 0; i < allFailed.length; i++) {
+        const item = allFailed[i];
+        setRetryingId(item.id);
+        try {
+          await api.retryAdminCheckin(item.id);
+          successCount++;
+        } catch (err) {
+          if (isUnauthorizedError(err)) {
+            await redirectToLogin();
+            return;
+          }
+          failCount++;
+        }
+        setBatchRetryProgress({ done: i + 1, total: allFailed.length, successCount, failCount });
+      }
+
+      // 全部完成后刷新数据
+      setRetryingId(null);
+      const [statsResp] = await Promise.all([
+        api.getDailyStats(30),
+        loadCheckins(checkinFilters),
+        refreshDashboardSnapshot()
+      ]);
+      setStats(statsResp);
+      setMessage(`一键补发完成：共 ${allFailed.length} 条，成功 ${successCount} 条，失败 ${failCount} 条`);
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await redirectToLogin();
+        return;
+      }
+      setError(err instanceof Error ? err.message : '一键补发出错');
+    } finally {
+      setRetryingId(null);
+      setBatchRetrying(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="page page-center">
@@ -444,6 +512,9 @@ export function AdminPage() {
               }}
               retryingId={retryingId}
               onRetryCheckin={retryCheckin}
+              batchRetrying={batchRetrying}
+              batchRetryProgress={batchRetryProgress}
+              onRetryAllFailed={retryAllFailed}
               onChangePage={(nextPage) => {
                 if (!checkinList || nextPage < 1 || nextPage > checkinList.pages || nextPage === checkinList.page) {
                   return;

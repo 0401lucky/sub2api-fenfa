@@ -16,6 +16,7 @@ import type {
   SessionUser,
   WhitelistItem
 } from '../types';
+import { getStoredSessionToken } from './session-token';
 
 const apiBase = import.meta.env.VITE_WELFARE_API_BASE?.replace(/\/+$/, '') || '';
 
@@ -51,6 +52,12 @@ async function request<T>(
   init: RequestInit = {}
 ): Promise<T> {
   const headers = new Headers(init.headers ?? {});
+  const sessionToken = getStoredSessionToken();
+
+  if (sessionToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${sessionToken}`);
+  }
+
   if (shouldAttachJsonContentType(init, headers)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -96,6 +103,14 @@ async function request<T>(
 }
 
 export const api = {
+  exchangeSessionHandoff: (handoff: string) =>
+    request<{
+      session_token: string;
+      redirect: string;
+    }>('/api/auth/session-handoff/exchange', {
+      method: 'POST',
+      body: JSON.stringify({ handoff })
+    }),
   getMe: () => request<SessionUser>('/api/auth/me'),
   logout: () => request<{ message: string }>('/api/auth/logout', { method: 'POST' }),
   getCheckinStatus: () => request<CheckinStatus>('/api/checkin/status'),

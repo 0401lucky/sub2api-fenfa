@@ -12,13 +12,16 @@ import {
   createCodeChallenge,
   randomBase64Url,
   signOAuthState,
+  signSessionHandoff,
   toSyntheticEmail,
-  verifyOAuthState
+  verifyOAuthState,
+  verifySessionHandoff
 } from '../utils/oauth.js';
 
 const LINUXDO_COOKIE_NAME = 'welfare_oauth_state';
 const SESSION_COOKIE_NAME = 'welfare_token';
 const COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
+const SESSION_HANDOFF_MAX_AGE_MS = 60 * 1000;
 
 function sanitizeRedirectPath(path: string | undefined): string {
   const value = (path ?? '').trim();
@@ -39,6 +42,9 @@ const callbackQuerySchema = z.object({
   state: z.string().min(1).optional(),
   error: z.string().optional(),
   error_description: z.string().optional()
+});
+const sessionHandoffExchangeSchema = z.object({
+  handoff: z.string().min(1, 'handoff 不能为空')
 });
 
 export const authRouter = Router();
@@ -165,8 +171,18 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
       path: '/api/auth/linuxdo'
     });
 
+    const handoff = signSessionHandoff(
+      {
+        token,
+        redirectPath: oauthState.redirectPath,
+        issuedAt: Date.now()
+      },
+      config.WELFARE_JWT_SECRET
+    );
+
     frontendCallbackUrl.hash = buildFrontendCallbackHash({
-      redirect: oauthState.redirectPath
+      redirect: oauthState.redirectPath,
+      handoff
     });
     res.redirect(frontendCallbackUrl.toString());
   } catch (error) {
@@ -174,6 +190,33 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
     sendFrontendError('oauth_failed', '登录流程失败，请稍后重试');
   }
 }));
+
+authRouter.post('/session-handoff/exchange', (req, res) => {
+  const parsed = sessionHandoffExchangeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, 'BAD_REQUEST', 'session handoff 参数无效');
+    return;
+  }
+
+  const handoff = verifySessionHandoff(
+    parsed.data.handoff,
+    config.WELFARE_JWT_SECRET
+  );
+  if (!handoff) {
+    fail(res, 401, 'INVALID_HANDOFF', '登录交接码无效，请重新登录');
+    return;
+  }
+
+  if (Date.now() - handoff.issuedAt > SESSION_HANDOFF_MAX_AGE_MS) {
+    fail(res, 401, 'HANDOFF_EXPIRED', '登录交接码已过期，请重新登录');
+    return;
+  }
+
+  ok(res, {
+    session_token: handoff.token,
+    redirect: handoff.redirectPath
+  });
+});
 
 authRouter.get('/me', requireAuth, asyncHandler(async (req, res) => {
   const user = req.sessionUser!;

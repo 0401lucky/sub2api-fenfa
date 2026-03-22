@@ -27,7 +27,7 @@ function decodeBase64Url(input: string): Buffer {
   return Buffer.from(`${normalized}${'='.repeat(padding)}`, 'base64');
 }
 
-function signPayload(payload: Record<string, unknown>, secret: string): string {
+function signPayload(payload: object, secret: string): string {
   const body = base64url(Buffer.from(JSON.stringify(payload), 'utf8'));
   const signature = base64url(
     crypto.createHmac('sha256', secret).update(body).digest()

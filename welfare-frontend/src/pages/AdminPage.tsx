@@ -373,11 +373,19 @@ export function AdminPage() {
           <div className="admin-sidebar-foot">
             <div className="admin-sidebar-foot-card">
               <span className="admin-sidebar-kicker">当前值守</span>
-              <strong>{user.username}</strong>
-              <p>{settings?.checkin_enabled ? '签到正在运行' : '签到当前关闭'}，业务时区 {settings?.timezone ?? '-'}</p>
+              <div className="admin-identity" style={{ padding: 0, border: 'none', background: 'transparent', margin: '12px 0' }}>
+                {user.avatar_url && <img className="user-avatar user-avatar-sm" src={user.avatar_url} alt={user.username} />}
+                <div className="stack">
+                  <strong>{user.username}</strong>
+                  <span className="muted" style={{ fontSize: 12 }}>sub2api #{user.sub2api_user_id}</span>
+                </div>
+              </div>
+              <p style={{ fontSize: 12, marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 12 }}>
+                {settings?.checkin_enabled ? '🟢 签到运行中' : '🔴 签到已关闭'}<br />业务时区 {settings?.timezone ?? '-'}
+              </p>
             </div>
-            <Link to="/checkin" className="button ghost admin-sidebar-link">
-              返回签到页
+            <Link to="/checkin" className="button ghost admin-sidebar-link" style={{ marginTop: 8 }}>
+              ← 返回主站
             </Link>
           </div>
         </aside>
@@ -385,20 +393,13 @@ export function AdminPage() {
         <main className="admin-dashboard-main">
           <header className="admin-dashboard-header">
             <div>
-              <span className="admin-surface-kicker">福利控制台</span>
+              <span className="admin-surface-kicker" style={{ color: 'var(--ink-2)' }}>Welfare Control Room</span>
               <h2>{currentSection.title}</h2>
               <p>{currentSection.description}</p>
             </div>
             <div className="admin-header-actions">
-              <div className="admin-identity">
-                {user.avatar_url && <img className="user-avatar user-avatar-sm" src={user.avatar_url} alt={user.username} />}
-                <div className="stack">
-                  <strong>{user.username}</strong>
-                  <span className="muted">sub2api #{user.sub2api_user_id}</span>
-                </div>
-              </div>
               <button className="button" onClick={() => void loadOverview()}>
-                刷新总览
+                <Icon name="bolt" size={16} /> 刷新数据
               </button>
             </div>
           </header>

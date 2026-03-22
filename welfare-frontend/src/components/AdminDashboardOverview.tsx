@@ -112,22 +112,22 @@ export function AdminDashboardOverview({
     <div className="admin-section-stack">
       <div className="admin-hero-grid">
         <section className="admin-surface admin-hero-panel">
-          <div className="admin-surface-kicker">Control Room</div>
-          <div className="admin-hero-copy">
-            <h2>福利站今天的运行节奏</h2>
-            <p>
-              把异常处理、活动码管理和签到配置放进一个工作台里，先看系统态势，再进入具体业务流。
+          <div className="admin-surface-kicker" style={{ color: 'var(--ink-2)' }}>OVERVIEW</div>
+          <div className="admin-hero-copy" style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800 }}>福利站运行态势</h2>
+            <p style={{ fontSize: 15, color: 'var(--ink-2)' }}>
+              将异常处理、活动码调度与核销放进极简工作台中。掌控全局脉络，洞察流水异常。
             </p>
           </div>
           <div className="admin-hero-actions">
             <button className="button primary" onClick={onOpenRedeemCodes}>
-              创建兑换码
+              活动码管理
             </button>
             <button className="button" onClick={onOpenCheckins}>
-              查看签到流水
+              最新签到
             </button>
             <button className="button ghost" onClick={onOpenRedeemClaims}>
-              处理失败补发
+              补发异常
             </button>
           </div>
         </section>

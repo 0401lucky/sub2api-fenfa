@@ -24,6 +24,7 @@ describe('AuthCallbackPage', () => {
     exchangeSessionHandoffMock.mockReset();
     mockUseAuth.mockReset();
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.history.replaceState({}, '', '/auth/callback#handoff=handoff-token&redirect=%2Fcheckin');
   });
 
@@ -67,5 +68,63 @@ describe('AuthCallbackPage', () => {
 
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('session-token');
     expect(window.location.hash).toBe('');
+  });
+
+  it('在回调页被重新挂载时也只会交换一次 handoff 并完成登录', async () => {
+    refreshMock.mockResolvedValue({
+      sub2api_user_id: 1
+    });
+    exchangeSessionHandoffMock.mockImplementation(
+      async () =>
+        await new Promise<{ session_token: string; redirect: string }>((resolve) => {
+          setTimeout(() => {
+            resolve({
+              session_token: 'session-token',
+              redirect: '/checkin'
+            });
+          }, 0);
+        })
+    );
+    mockUseAuth.mockReturnValue({
+      status: 'loading',
+      user: null,
+      error: null,
+      refresh: refreshMock,
+      logout: vi.fn()
+    });
+
+    const firstRender = render(
+      <MemoryRouter
+        initialEntries={['/auth/callback']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/checkin" element={<div>签到页</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(window.location.hash).toBe('');
+    firstRender.unmount();
+
+    render(
+      <MemoryRouter
+        initialEntries={['/auth/callback']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/checkin" element={<div>签到页</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('签到页')).toBeInTheDocument();
+    });
+
+    expect(exchangeSessionHandoffMock).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('session-token');
   });
 });

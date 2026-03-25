@@ -2,23 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import {
+  captureAuthCallbackParams,
+  clearAuthCallbackParams,
+  exchangeSessionHandoffOnce
+} from '../lib/auth-callback';
 import { storeSessionToken } from '../lib/session-token';
-
-function parseParams(...inputs: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-
-  for (const input of inputs) {
-    const normalized = input.startsWith('#') || input.startsWith('?')
-      ? input.slice(1)
-      : input;
-    const params = new URLSearchParams(normalized);
-    params.forEach((value, key) => {
-      out[key] = value;
-    });
-  }
-
-  return out;
-}
 
 export function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -26,31 +15,34 @@ export function AuthCallbackPage() {
   const [message, setMessage] = useState('正在处理登录回调...');
   const [isError, setIsError] = useState(false);
   const handoffHandledRef = useRef(false);
-  const params = useMemo(
-    () => parseParams(window.location.hash, window.location.search),
+  const callbackCapture = useMemo(
+    () => captureAuthCallbackParams(window.location.search, window.location.hash),
     []
   );
-  const handoff = params.handoff;
-  const redirect = params.redirect || '/checkin';
-  const error = params.error;
-  const detail = params.detail;
+  const handoff = callbackCapture.params.handoff;
+  const redirect = callbackCapture.params.redirect || '/checkin';
+  const error = callbackCapture.params.error;
+  const detail = callbackCapture.params.detail;
 
   useEffect(() => {
     let cancelled = false;
 
-    if (handoff && !handoffHandledRef.current) {
-      handoffHandledRef.current = true;
+    if (callbackCapture.shouldClearUrl) {
       window.history.replaceState(
         null,
         '',
         `${window.location.pathname}${window.location.search}`
       );
+    }
+
+    if (handoff && !handoffHandledRef.current) {
+      handoffHandledRef.current = true;
       setIsError(false);
       setMessage('登录成功，正在建立会话...');
 
       void (async () => {
         try {
-          const result = await api.exchangeSessionHandoff(handoff);
+          const result = await exchangeSessionHandoffOnce(handoff, api.exchangeSessionHandoff);
           if (cancelled) {
             return;
           }
@@ -61,6 +53,7 @@ export function AuthCallbackPage() {
             return;
           }
 
+          clearAuthCallbackParams();
           setMessage('登录成功，正在跳转...');
           navigate(result.redirect || redirect, { replace: true });
         } catch (exchangeError) {
@@ -68,6 +61,7 @@ export function AuthCallbackPage() {
             return;
           }
 
+          clearAuthCallbackParams();
           setIsError(true);
           setMessage(
             `登录状态校验失败：${
@@ -85,11 +79,7 @@ export function AuthCallbackPage() {
     }
 
     if (error) {
-      window.history.replaceState(
-        null,
-        '',
-        `${window.location.pathname}${window.location.search}`
-      );
+      clearAuthCallbackParams();
       setIsError(true);
       setMessage(`登录失败：${detail || error}`);
       const timeout = window.setTimeout(() => {
@@ -105,6 +95,7 @@ export function AuthCallbackPage() {
     }
 
     if (status === 'authenticated' && user) {
+      clearAuthCallbackParams();
       setIsError(false);
       setMessage('登录成功，正在跳转...');
       navigate(redirect, { replace: true });
@@ -117,6 +108,7 @@ export function AuthCallbackPage() {
       return;
     }
 
+    clearAuthCallbackParams();
     setIsError(true);
     setMessage('登录失败：未建立有效会话');
     const timeout = window.setTimeout(() => {
@@ -125,7 +117,18 @@ export function AuthCallbackPage() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [authError, detail, error, handoff, navigate, redirect, refresh, status, user]);
+  }, [
+    authError,
+    callbackCapture.shouldClearUrl,
+    detail,
+    error,
+    handoff,
+    navigate,
+    redirect,
+    refresh,
+    status,
+    user
+  ]);
 
   return (
     <div className="page page-center">
@@ -137,7 +140,10 @@ export function AuthCallbackPage() {
           <button
             className="button"
             style={{ marginTop: 12 }}
-            onClick={() => navigate('/login', { replace: true })}
+            onClick={() => {
+              clearAuthCallbackParams();
+              navigate('/login', { replace: true });
+            }}
           >
             返回登录
           </button>

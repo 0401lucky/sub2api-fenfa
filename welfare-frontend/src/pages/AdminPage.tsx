@@ -404,7 +404,7 @@ export function AdminPage() {
             <div className="admin-brand-mark">WF</div>
             <div>
               <span className="admin-sidebar-kicker">Welfare Station</span>
-              <h1>CONTROL ROOM</h1>
+              <h1>CONTROL <span className="text-gradient">ROOM</span></h1>
               <p>把签到、兑换码与权限操作收进一个值守界面。</p>
             </div>
           </div>

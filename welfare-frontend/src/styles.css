@@ -1,124 +1,64 @@
-/* ─── Crystal Glassmorphism 设计系统 (高明度亮色版) ─── */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+/* ─── Modern SaaS / Grid 设计系统 ─── */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
 :root {
   color-scheme: light;
 
-  /* 表面层次 - 纯净白玉系 */
+  /* 表面层次 - 纯白/极浅灰 */
   --surface-0: #f8fafc;
-  /* 底色：带微蓝相的极浅灰白 */
-  --surface-1: rgba(255, 255, 255, 0.6);
-  --surface-2: rgba(255, 255, 255, 0.75);
-  --surface-3: rgba(255, 255, 255, 0.9);
+  --surface-1: #ffffff;
 
-  /* 文字墨色层次 - 柔和深灰而非死黑 */
-  --ink-0: #0f172a;
-  /* Slate 900 */
-  --ink-1: #334155;
-  /* Slate 700 */
-  --ink-2: #64748b;
-  /* Slate 500 */
-  --ink-3: #94a3b8;
-  /* Slate 400 */
+  /* 文字墨色 - 深色极简 */
+  --ink-0: #0f172a; /* Slate 900 */
+  --ink-1: #334155; /* Slate 700 */
+  --ink-2: #64748b; /* Slate 500 */
+  --ink-3: #94a3b8; /* Slate 400 */
 
-  /* 品牌焕彩色系 (马卡龙感流光) */
-  --aurora-1: #8b5cf6;
-  /* 紫 */
-  --aurora-2: #3b82f6;
-  /* 蓝 */
-  --aurora-3: #14b8a6;
-  /* 青 */
-  --aurora-4: #f43f5e;
-  /* 粉/珊瑚 */
+  /* 品牌渐变/点缀色 */
+  --aurora-1: #6366f1; /* Indigo */
+  --aurora-2: #3b82f6; /* Blue */
 
-  /* 面板/卡片参数 (水晶毛玻璃感) */
-  --panel-bg: rgba(255, 255, 255, 0.45);
-  --panel-border: rgba(255, 255, 255, 0.7);
-  --panel-border-highlight: rgba(255, 255, 255, 0.95);
-  --panel-shadow: rgba(15, 23, 42, 0.06);
-  /* 极度克制的阴影 */
-  --panel-blur: blur(28px);
+  /* 面板卡片参数 */
+  --panel-bg: #ffffff;
+  --panel-border: #e2e8f0;
+  --panel-border-highlight: #cbd5e1;
 
-  /* 状态颜色 */
+  /* 状态色 */
   --sage: #059669;
-  /* 翡翠绿 */
-  --sage-soft: rgba(52, 211, 153, 0.2);
+  --sage-soft: rgba(52, 211, 153, 0.15);
   --amber: #d97706;
-  /* 琥珀色 */
-  --amber-soft: rgba(251, 191, 36, 0.2);
+  --amber-soft: rgba(251, 191, 36, 0.15);
   --rose: #e11d48;
-  /* 玫瑰红 */
-  --rose-soft: rgba(251, 113, 133, 0.2);
+  --rose-soft: rgba(225, 29, 72, 0.15);
 
-  /* 圆角参数 - 更大更柔和 */
-  --radius-sm: 14px;
-  --radius-md: 22px;
-  --radius-lg: 32px;
-  --radius-pill: 999px;
+  /* 圆角参数 - 稍微克制现代感 */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
 
-  /* 现代排版 */
-  --font-display: 'Outfit', sans-serif;
+  /* 字体排印 */
+  --font-display: 'Outfit', -apple-system, sans-serif;
   --font-body: 'Inter', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Consolas', monospace;
 }
 
-/* ─── 全局关键帧动画 ─── */
-@keyframes pastel-flow {
-  0% {
-    transform: rotate(0deg) scale(1) translate(0, 0);
-  }
-
-  25% {
-    transform: rotate(90deg) scale(1.1) translate(5%, 5%);
-  }
-
-  50% {
-    transform: rotate(180deg) scale(1.2) translate(0, 10%);
-  }
-
-  75% {
-    transform: rotate(270deg) scale(1.1) translate(-5%, 5%);
-  }
-
-  100% {
-    transform: rotate(360deg) scale(1) translate(0, 0);
-  }
-}
-
+/* ─── 动画 ─── */
 @keyframes float {
-
-  0%,
-  100% {
+  0%, 100% {
     transform: translateY(0);
   }
-
   50% {
     transform: translateY(-6px);
   }
 }
 
-@keyframes pulse-glow-light {
-
-  0%,
-  100% {
-    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.15), inset 0 2px 0 rgba(255, 255, 255, 0.6);
-  }
-
-  50% {
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.8);
-  }
-}
-
-/* ─── 重置与页面基础层 ─── */
-*,
-*::before,
-*::after {
+/* ─── 重置与基础 ─── */
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
+html, body, #root {
   min-height: 100%;
   height: 100%;
 }
@@ -130,37 +70,27 @@ body {
   font-size: 15px;
   line-height: 1.6;
   background-color: var(--surface-0);
+  background-image: 
+    linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ─── 全息彩色动态背景层 ─── */
+/* 底部局部柔和光晕 */
 body::before {
   content: '';
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background:
-    radial-gradient(circle at 10% 10%, rgba(139, 92, 246, 0.03), transparent 60%),
-    radial-gradient(circle at 90% 90%, rgba(59, 130, 246, 0.03), transparent 60%),
-    radial-gradient(circle at 50% 50%, rgba(20, 184, 166, 0.02), transparent 70%);
-  /* 移除了强烈的动画和滤镜，提升基础质感和流畅度 */
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80vw;
+  height: 40vh;
+  background: radial-gradient(ellipse at bottom, rgba(99, 102, 241, 0.1), transparent 70%);
+  filter: blur(60px);
   pointer-events: none;
   z-index: -2;
-}
-
-/* 轻量级噪点带来质感 */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  opacity: 0.12;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: -1;
-  mix-blend-mode: soft-light;
 }
 
 /* ─── 链接与标题 ─── */
@@ -208,27 +138,12 @@ h3 {
   border-radius: var(--radius-lg);
   padding: clamp(32px, 5vw, 48px);
   background: var(--panel-bg);
-  backdrop-filter: var(--panel-blur);
-  -webkit-backdrop-filter: var(--panel-blur);
   border: 1px solid var(--panel-border);
-  box-shadow:
-    0 24px 48px -12px var(--panel-shadow),
-    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
-    0 4px 6px -1px rgba(0, 0, 0, 0.02);
-  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease, border-color 0.4s ease;
+  box-shadow: 
+    0 12px 32px -4px rgba(15, 23, 42, 0.04),
+    0 4px 6px -2px rgba(15, 23, 42, 0.02);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   overflow: hidden;
-}
-
-/* 顶部高光倒角 */
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1.5px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.4));
-  opacity: 0.8;
 }
 
 .auth-card {
@@ -237,9 +152,8 @@ h3 {
 
 .auth-card:hover {
   border-color: var(--panel-border-highlight);
-  box-shadow:
-    0 24px 48px -12px rgba(15, 23, 42, 0.08),
-    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+  box-shadow: 
+    0 20px 40px -8px rgba(15, 23, 42, 0.08);
   transform: translateY(-2px);
 }
 
@@ -247,29 +161,32 @@ h3 {
 .eyebrow {
   display: inline-block;
   margin: 0 0 16px;
-  padding: 6px 18px;
+  padding: 6px 16px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.4));
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  color: var(--aurora-1);
+  background: var(--surface-1);
+  border: 1px solid var(--panel-border);
+  color: var(--ink-1);
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
 }
 
 .hero-title {
   font-size: clamp(36px, 6vw, 56px);
   font-weight: 800;
   line-height: 1.15;
-  background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+  color: var(--ink-0);
+  margin-bottom: 12px;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--aurora-1) 0%, var(--aurora-2) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-bottom: 12px;
 }
 
 .lead {
@@ -354,18 +271,16 @@ h3 {
   gap: 16px;
   padding: 20px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3));
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.02);
-  backdrop-filter: blur(10px);
+  border: 1px solid var(--panel-border);
+  background: var(--surface-1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .feature-item:hover {
   transform: translateY(-4px) scale(1.01);
-  border-color: #fff;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 15px 30px -5px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(255, 255, 255, 1) inset;
+  border-color: var(--panel-border-highlight);
+  box-shadow: 0 12px 24px -6px rgba(15, 23, 42, 0.05);
 }
 
 .icon-wrapper {
@@ -422,65 +337,58 @@ h3 {
   gap: 12px;
 }
 
-/* ─── 水晶互动按钮 (.button) ─── */
+/* ─── 互动按钮 (.button) ─── */
 .button {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--panel-border);
+  background: var(--surface-1);
   color: var(--ink-1);
   border-radius: var(--radius-sm);
-  padding: 12px 24px;
+  padding: 10px 20px;
   cursor: pointer;
   font-size: 15px;
   font-weight: 600;
   font-family: var(--font-body);
-  letter-spacing: 0.02em;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.04);
-  backdrop-filter: blur(10px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .button:hover {
-  background: #fff;
-  border-color: rgba(0, 0, 0, 0.1);
+  background: var(--surface-0);
+  border-color: var(--panel-border-highlight);
   color: var(--ink-0);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .button:active {
-  transform: translateY(0) scale(0.97);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  transform: scale(0.96);
 }
 
-/* 主水晶按钮 - 全息质感 */
 .button.primary {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: linear-gradient(135deg, var(--aurora-2) 0%, var(--aurora-1) 100%);
+  border-color: transparent;
+  background: var(--ink-0);
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
 }
 
 .button.primary:hover {
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  background: #1e293b;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
   color: #fff;
+  transform: translateY(-1px);
 }
 
 .button.ghost {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
-  backdrop-filter: none;
 }
 
 .button.ghost:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(15, 23, 42, 0.04);
   color: var(--ink-0);
 }
 
@@ -494,13 +402,12 @@ h3 {
 .button.danger:hover {
   background: rgba(225, 29, 72, 0.15);
   color: #be123c;
-  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.15);
 }
 
 .button.wide {
   width: 100%;
   max-width: 400px;
-  padding: 16px 32px;
+  padding: 14px 28px;
   font-size: 16px;
   border-radius: var(--radius-md);
   font-weight: 700;
@@ -525,34 +432,18 @@ h3 {
 .stat-card {
   position: relative;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--panel-border);
   padding: 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.4) 100%);
+  background: var(--surface-1);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   overflow: hidden;
 }
 
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--aurora-2), var(--aurora-1), transparent);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
 .stat-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05), inset 0 0 0 1px #fff;
-  background: rgba(255, 255, 255, 0.95);
-}
-
-.stat-card:hover::before {
-  opacity: 1;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+  border-color: var(--panel-border-highlight);
 }
 
 .stat-label {
@@ -589,13 +480,12 @@ h3 {
 
 /* ─── 容器和区块 (.panel, .section) ─── */
 .panel {
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--panel-border);
   border-radius: var(--radius-md);
   padding: 24px;
   margin: 16px 0 32px;
-  background: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.02);
-  backdrop-filter: blur(12px);
+  background: var(--surface-0);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .section-title {
@@ -633,7 +523,7 @@ h3 {
   color: var(--ink-1);
 }
 
-/* 亮色毛玻璃输入框 */
+/* 输入框 */
 .field input[type='text'],
 .field input[type='number'],
 .field input[type='date'],
@@ -641,22 +531,22 @@ h3 {
 .field select {
   width: 100%;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--panel-border);
+  background: var(--surface-1);
   color: var(--ink-0);
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: 15px;
   font-family: var(--font-body);
   outline: none;
-  transition: all 0.3s ease;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .field input:focus,
 .field select:focus {
-  border-color: var(--aurora-2);
+  border-color: var(--ink-0);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 1px var(--ink-0);
 }
 
 .field select {
@@ -757,19 +647,19 @@ h3 {
   grid-template-columns: minmax(130px, 1.2fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(150px, 1.2fr);
   align-items: center;
   gap: 12px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--panel-border);
   border-radius: var(--radius-sm);
   padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(8px);
+  background: var(--surface-1);
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
 }
 
 .list-item:hover {
-  background: #ffffff;
-  border-color: rgba(0, 0, 0, 0.08);
+  background: var(--surface-0);
+  border-color: var(--panel-border-highlight);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
 }
 
 .list-item strong {
@@ -1049,9 +939,9 @@ h3 {
   top: 18px;
   align-self: start;
   padding: 24px 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
-  border: 1px solid rgba(255, 255, 255, 1);
-  box-shadow: 0 12px 32px -10px rgba(15, 23, 42, 0.05);
+  background: var(--surface-0);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.05);
   color: var(--ink-0);
   min-height: calc(100vh - 36px);
   max-height: calc(100vh - 36px);
@@ -1060,21 +950,9 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  backdrop-filter: blur(24px);
 }
 
-.admin-dashboard-sidebar::before,
-.admin-dashboard-main::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.65), transparent 90%);
-}
+/* 移除复杂的网格覆盖效果，保持干净 */
 
 .admin-brand {
   display: grid;

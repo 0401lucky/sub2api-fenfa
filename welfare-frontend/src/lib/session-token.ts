@@ -1,12 +1,30 @@
 export const SESSION_TOKEN_STORAGE_KEY = 'welfare.session_token';
 
-function getStorage(): Storage | null {
+interface SessionTokenStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+function isSessionTokenStorage(value: unknown): value is SessionTokenStorage {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof (value as SessionTokenStorage).getItem === 'function' &&
+    typeof (value as SessionTokenStorage).setItem === 'function' &&
+    typeof (value as SessionTokenStorage).removeItem === 'function'
+  );
+}
+
+function getStorage(): SessionTokenStorage | null {
   if (typeof window === 'undefined') {
     return null;
   }
 
   try {
-    return window.localStorage;
+    return isSessionTokenStorage(window.localStorage)
+      ? window.localStorage
+      : null;
   } catch {
     return null;
   }

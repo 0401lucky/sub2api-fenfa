@@ -153,7 +153,7 @@ export function CheckinPage() {
         <div className="row topbar">
           <div>
             <span className="eyebrow">签到中心</span>
-            <h1 className="hero-title">每日签到</h1>
+            <h1 className="hero-title">每日<span className="text-gradient">签到</span></h1>
             <div className="user-info">
               {user?.avatar_url && (
                 <img

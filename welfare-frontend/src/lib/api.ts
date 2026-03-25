@@ -47,6 +47,11 @@ function shouldAttachJsonContentType(init: RequestInit, headers: Headers): boole
   return !(init.body instanceof FormData);
 }
 
+function resolveApiPath(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return apiBase ? `${apiBase}${normalizedPath}` : normalizedPath;
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {}
@@ -62,7 +67,7 @@ async function request<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${apiBase}${path}`, {
+  const response = await fetch(resolveApiPath(path), {
     ...init,
     headers
   });
@@ -221,7 +226,7 @@ export const api = {
 };
 
 export function buildLinuxDoStartUrl(redirectPath: string): string {
-  const url = new URL('/api/auth/linuxdo/start', apiBase || window.location.origin);
+  const url = new URL(resolveApiPath('/api/auth/linuxdo/start'), window.location.origin);
   url.searchParams.set('redirect', redirectPath);
   return url.toString();
 }

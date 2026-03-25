@@ -488,6 +488,66 @@ h3 {
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
+.checkin-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.checkin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.checkin-hero-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: clamp(28px, 4vw, 40px);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  box-shadow: 0 18px 40px -20px rgba(59, 130, 246, 0.45);
+}
+
+.checkin-hero-amount {
+  font-family: var(--font-display);
+  font-size: clamp(40px, 7vw, 72px);
+  line-height: 1;
+  font-weight: 800;
+  color: var(--ink-0);
+}
+
+.checkin-hero-status {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.checkin-big-btn {
+  margin-top: 10px;
+  min-width: min(100%, 280px);
+  min-height: 56px;
+  padding-inline: 28px;
+  border-radius: 18px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.checkin-history-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.section-head {
+  margin-bottom: 16px;
+}
+
 .section-title {
   margin: 0 0 16px;
   font-size: 22px;
@@ -857,6 +917,10 @@ h3 {
     padding: 32px 16px 40px;
   }
 
+  .checkin-history-columns {
+    grid-template-columns: 1fr;
+  }
+
   .list-item,
   .admin-checkin-item,
   .admin-redeem-code-item,
@@ -871,6 +935,18 @@ h3 {
     padding: 20px 12px 32px;
     width: 100%;
     min-width: 320px;
+  }
+
+  .checkin-header {
+    align-items: flex-start;
+  }
+
+  .checkin-hero-widget {
+    padding: 24px 20px;
+  }
+
+  .checkin-big-btn {
+    width: 100%;
   }
 
   .hero-title {

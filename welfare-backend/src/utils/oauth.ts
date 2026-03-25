@@ -8,6 +8,7 @@ export interface OAuthStatePayload {
 }
 
 export interface SessionHandoffPayload {
+  handoffId: string;
   token: string;
   redirectPath: string;
   issuedAt: number;

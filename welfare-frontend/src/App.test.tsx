@@ -40,7 +40,10 @@ describe('App routes', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/admin']}>
+      <MemoryRouter
+        initialEntries={['/admin']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <App />
       </MemoryRouter>
     );
@@ -59,7 +62,10 @@ describe('App routes', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/checkin']}>
+      <MemoryRouter
+        initialEntries={['/checkin']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <App />
       </MemoryRouter>
     );

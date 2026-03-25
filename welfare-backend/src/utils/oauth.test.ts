@@ -41,6 +41,7 @@ describe('oauth utils', () => {
     const secret = '01234567890123456789';
     const token = signSessionHandoff(
       {
+        handoffId: 'handoff-id',
         token: 'session-token',
         redirectPath: '/admin',
         issuedAt: 1
@@ -48,6 +49,7 @@ describe('oauth utils', () => {
       secret
     );
     const parsed = verifySessionHandoff(token, secret);
+    expect(parsed?.handoffId).toBe('handoff-id');
     expect(parsed?.token).toBe('session-token');
     expect(parsed?.redirectPath).toBe('/admin');
   });

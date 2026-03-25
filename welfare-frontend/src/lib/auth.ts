@@ -114,11 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    clearStoredSessionToken();
     try {
       await api.logout();
     } catch {
       // 无论后端退出接口是否成功，都以本地会话状态为准。
+    } finally {
+      clearStoredSessionToken();
     }
     setUser(null);
     setError(null);

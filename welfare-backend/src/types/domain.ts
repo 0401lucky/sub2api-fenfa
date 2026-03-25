@@ -6,6 +6,12 @@ export interface SessionUser {
   avatarUrl: string | null;
 }
 
+export interface VerifiedSession {
+  user: SessionUser;
+  tokenId: string;
+  expiresAtMs: number;
+}
+
 export interface WelfareSettings {
   checkinEnabled: boolean;
   dailyRewardBalance: number;

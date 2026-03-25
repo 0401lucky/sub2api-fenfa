@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { isValidTimezone } from './utils/date.js';
+import { isSafeLinuxDoSubject } from './utils/oauth.js';
 
 dotenv.config();
 
@@ -82,11 +84,7 @@ const configSchema = z.object({
   WELFARE_FRONTEND_URL: z.string().url('WELFARE_FRONTEND_URL 必须是合法 URL'),
   WELFARE_CORS_ORIGINS: z.string().default(''),
   WELFARE_JWT_SECRET: z.string().min(16, 'WELFARE_JWT_SECRET 至少 16 位'),
-  WELFARE_JWT_EXPIRES_IN: z.string().default('7d'),
-  WELFARE_COOKIE_SECURE: booleanFromString.default(false),
-  WELFARE_SESSION_COOKIE_SAME_SITE: z
-    .enum(['lax', 'strict', 'none'])
-    .default('lax'),
+  WELFARE_JWT_EXPIRES_IN: z.string().default('12h'),
 
   LINUXDO_CLIENT_ID: z.string().min(1, 'LINUXDO_CLIENT_ID 不能为空'),
   LINUXDO_CLIENT_SECRET: z.string().min(1, 'LINUXDO_CLIENT_SECRET 不能为空'),
@@ -99,10 +97,14 @@ const configSchema = z.object({
   SUB2API_BASE_URL: z.string().url('SUB2API_BASE_URL 必须是合法 URL'),
   SUB2API_ADMIN_API_KEY: z.string().min(1, 'SUB2API_ADMIN_API_KEY 不能为空'),
   SUB2API_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+  WELFARE_REVOKED_TOKEN_CLEANUP_INTERVAL: z.string().default('6h'),
 
   DEFAULT_CHECKIN_ENABLED: booleanFromString.default(true),
   DEFAULT_DAILY_REWARD: z.coerce.number().positive().default(10),
-  DEFAULT_TIMEZONE: z.string().default('Asia/Shanghai'),
+  DEFAULT_TIMEZONE: z
+    .string()
+    .default('Asia/Shanghai')
+    .refine(isValidTimezone, 'DEFAULT_TIMEZONE 必须是合法时区'),
   BOOTSTRAP_ADMIN_SUBJECTS: z.string().default('')
 });
 
@@ -123,19 +125,11 @@ if (!parsed.success) {
 }
 
 const raw = parsed.data;
-if (
-  raw.WELFARE_SESSION_COOKIE_SAME_SITE === 'none' &&
-  !raw.WELFARE_COOKIE_SECURE
-) {
-  throw new Error(
-    'WELFARE_SESSION_COOKIE_SAME_SITE=none 时，WELFARE_COOKIE_SECURE 必须为 true'
-  );
-}
-
-const jwtMaxAgeMs = parseDurationMs(
-  raw.WELFARE_JWT_EXPIRES_IN,
-  'WELFARE_JWT_EXPIRES_IN'
+const revokedTokenCleanupIntervalMs = parseDurationMs(
+  raw.WELFARE_REVOKED_TOKEN_CLEANUP_INTERVAL,
+  'WELFARE_REVOKED_TOKEN_CLEANUP_INTERVAL'
 );
+parseDurationMs(raw.WELFARE_JWT_EXPIRES_IN, 'WELFARE_JWT_EXPIRES_IN');
 
 const frontendOrigin = normalizeOrigin(raw.WELFARE_FRONTEND_URL, 'WELFARE_FRONTEND_URL');
 const configuredCorsOrigins = raw.WELFARE_CORS_ORIGINS.split(',')
@@ -145,13 +139,22 @@ const configuredCorsOrigins = raw.WELFARE_CORS_ORIGINS.split(',')
 const bootstrapAdminSubjects = raw.BOOTSTRAP_ADMIN_SUBJECTS.split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+const invalidBootstrapSubject = bootstrapAdminSubjects.find(
+  (item) => !isSafeLinuxDoSubject(item)
+);
+
+if (invalidBootstrapSubject) {
+  throw new Error(
+    `环境变量校验失败：BOOTSTRAP_ADMIN_SUBJECTS 包含非法 subject: ${invalidBootstrapSubject}`
+  );
+}
 
 export const config = {
   ...raw,
-  WELFARE_JWT_MAX_AGE_MS: jwtMaxAgeMs,
   WELFARE_FRONTEND_ORIGIN: frontendOrigin,
   WELFARE_CORS_ORIGINS:
     configuredCorsOrigins.length > 0 ? configuredCorsOrigins : [frontendOrigin],
+  WELFARE_REVOKED_TOKEN_CLEANUP_INTERVAL_MS: revokedTokenCleanupIntervalMs,
   BOOTSTRAP_ADMIN_SUBJECTS: bootstrapAdminSubjects,
   SUB2API_BASE_URL: raw.SUB2API_BASE_URL.replace(/\/+$/, '')
 };

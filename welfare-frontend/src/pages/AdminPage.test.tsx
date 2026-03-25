@@ -101,7 +101,7 @@ describe('AdminPage dashboard', () => {
 
   it('默认显示总览分区', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AdminPage />
       </MemoryRouter>
     );
@@ -112,7 +112,7 @@ describe('AdminPage dashboard', () => {
 
   it('可以从总览切换到兑换码分区', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AdminPage />
       </MemoryRouter>
     );

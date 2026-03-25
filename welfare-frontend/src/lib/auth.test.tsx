@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from './auth';
 import { SESSION_TOKEN_STORAGE_KEY } from './session-token';
 
@@ -16,7 +16,7 @@ vi.mock('./api', () => ({
 }));
 
 function AuthProbe() {
-  const { status, error, refresh, user } = useAuth();
+  const { status, error, refresh, user, logout } = useAuth();
 
   return (
     <div>
@@ -24,6 +24,7 @@ function AuthProbe() {
         {status}|{error ?? '-'}|{user?.linuxdo_subject ?? '-'}
       </div>
       <button onClick={() => void refresh()}>refresh</button>
+      <button onClick={() => void logout()}>logout</button>
     </div>
   );
 }
@@ -32,7 +33,12 @@ describe('AuthProvider', () => {
   beforeEach(() => {
     getMeMock.mockReset();
     logoutMock.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('把非 401 的会话恢复异常保留为明确错误态', async () => {
@@ -114,5 +120,41 @@ describe('AuthProvider', () => {
       );
     });
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('fresh-token');
+  });
+
+  it('退出登录时会先调用后端注销，再清理本地 token', async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, 'live-token');
+    getMeMock.mockResolvedValue({
+      sub2api_user_id: 1,
+      linuxdo_subject: 'live-user',
+      synthetic_email: 'live-user@linuxdo-connect.invalid',
+      username: 'live-user',
+      avatar_url: null,
+      is_admin: false
+    });
+    logoutMock.mockImplementation(async () => {
+      expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('live-token');
+      return { message: '已退出登录' };
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-state')).toHaveTextContent(
+        'authenticated|-|live-user'
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'logout' }));
+
+    await waitFor(() => {
+      expect(logoutMock).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('auth-state')).toHaveTextContent('unauthenticated|-|-');
+    });
+    expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBeNull();
   });
 });

@@ -44,7 +44,10 @@ describe('AuthCallbackPage', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/auth/callback']}>
+      <MemoryRouter
+        initialEntries={['/auth/callback']}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <Routes>
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/checkin" element={<div>签到页</div>} />

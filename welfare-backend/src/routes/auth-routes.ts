@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { requireAuth } from '../middleware/auth-middleware.js';
 import { linuxDoOAuthService } from '../services/linuxdo-oauth-service.js';
+import { authArtifactService } from '../services/auth-artifact-service.js';
 import { sessionService } from '../services/session-service.js';
+import { sessionStateService } from '../services/session-state-service.js';
 import { sub2apiClient } from '../services/sub2api-client.js';
 import { welfareRepository } from '../services/checkin-service.js';
 import { fail, ok } from '../utils/response.js';
@@ -17,8 +19,9 @@ import {
   verifyOAuthState,
   verifySessionHandoff
 } from '../utils/oauth.js';
+import { resolveAppUrl } from '../utils/url.js';
 
-const COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
 const SESSION_HANDOFF_MAX_AGE_MS = 60 * 1000;
 
 function sanitizeRedirectPath(path: string | undefined): string {
@@ -47,16 +50,27 @@ const sessionHandoffExchangeSchema = z.object({
 
 export const authRouter = Router();
 
-authRouter.get('/linuxdo/start', (req, res) => {
+authRouter.get('/linuxdo/start', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  const issuedAt = Date.now();
+  const stateId = randomBase64Url(24);
   const codeVerifier = randomBase64Url(32);
   const codeChallenge = createCodeChallenge(codeVerifier);
   const redirectPath = sanitizeRedirectPath(req.query.redirect as string | undefined);
+
+  await authArtifactService.issueArtifact({
+    artifactId: stateId,
+    artifactType: 'oauth_state',
+    expiresAtMs: issuedAt + OAUTH_STATE_MAX_AGE_MS
+  });
+
   const signedState = signOAuthState(
     {
-      state: randomBase64Url(24),
+      state: stateId,
       codeVerifier,
       redirectPath,
-      issuedAt: Date.now()
+      issuedAt
     },
     config.WELFARE_JWT_SECRET
   );
@@ -71,9 +85,11 @@ authRouter.get('/linuxdo/start', (req, res) => {
   authorizeUrl.searchParams.set('code_challenge_method', 'S256');
 
   res.redirect(authorizeUrl.toString());
-});
+}));
 
 authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
   const parsed = callbackQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     fail(res, 400, 'BAD_REQUEST', 'OAuth 回调参数无效');
@@ -81,7 +97,10 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
   }
 
   const query = parsed.data;
-  const frontendCallbackUrl = new URL('/auth/callback', config.WELFARE_FRONTEND_URL);
+  const frontendCallbackUrl = resolveAppUrl(
+    config.WELFARE_FRONTEND_URL,
+    'auth/callback'
+  );
 
   const sendFrontendError = (errorCode: string, detail?: string): void => {
     frontendCallbackUrl.hash = buildFrontendCallbackHash({
@@ -107,7 +126,19 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
     return;
   }
 
-  if (Date.now() - oauthState.issuedAt > COOKIE_MAX_AGE_MS) {
+  const consumeStateResult = await authArtifactService.consumeArtifact(
+    oauthState.state,
+    'oauth_state'
+  );
+  if (consumeStateResult === 'missing') {
+    sendFrontendError('state_invalid', '登录状态校验失败，请重新登录');
+    return;
+  }
+  if (consumeStateResult === 'used') {
+    sendFrontendError('state_used', '该登录状态已被使用，请重新登录');
+    return;
+  }
+  if (consumeStateResult === 'expired' || Date.now() - oauthState.issuedAt > OAUTH_STATE_MAX_AGE_MS) {
     sendFrontendError('state_expired', '登录状态已过期，请重新登录');
     return;
   }
@@ -134,11 +165,21 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
       avatarUrl: profile.avatarUrl
     });
 
+    const handoffIssuedAt = Date.now();
+    const handoffId = randomBase64Url(24);
+
+    await authArtifactService.issueArtifact({
+      artifactId: handoffId,
+      artifactType: 'session_handoff',
+      expiresAtMs: handoffIssuedAt + SESSION_HANDOFF_MAX_AGE_MS
+    });
+
     const handoff = signSessionHandoff(
       {
+        handoffId,
         token,
         redirectPath: sanitizeRedirectPath(oauthState.redirectPath),
-        issuedAt: Date.now()
+        issuedAt: handoffIssuedAt
       },
       config.WELFARE_JWT_SECRET
     );
@@ -154,7 +195,9 @@ authRouter.get('/linuxdo/callback', asyncHandler(async (req, res) => {
   }
 }));
 
-authRouter.post('/session-handoff/exchange', (req, res) => {
+authRouter.post('/session-handoff/exchange', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
   const parsed = sessionHandoffExchangeSchema.safeParse(req.body);
   if (!parsed.success) {
     fail(res, 400, 'BAD_REQUEST', 'session handoff 参数无效');
@@ -170,7 +213,22 @@ authRouter.post('/session-handoff/exchange', (req, res) => {
     return;
   }
 
-  if (Date.now() - handoff.issuedAt > SESSION_HANDOFF_MAX_AGE_MS) {
+  const consumeHandoffResult = await authArtifactService.consumeArtifact(
+    handoff.handoffId,
+    'session_handoff'
+  );
+  if (consumeHandoffResult === 'missing') {
+    fail(res, 401, 'INVALID_HANDOFF', '登录交接码无效，请重新登录');
+    return;
+  }
+  if (consumeHandoffResult === 'used') {
+    fail(res, 401, 'HANDOFF_ALREADY_USED', '登录交接码已使用，请重新登录');
+    return;
+  }
+  if (
+    consumeHandoffResult === 'expired' ||
+    Date.now() - handoff.issuedAt > SESSION_HANDOFF_MAX_AGE_MS
+  ) {
     fail(res, 401, 'HANDOFF_EXPIRED', '登录交接码已过期，请重新登录');
     return;
   }
@@ -179,9 +237,11 @@ authRouter.post('/session-handoff/exchange', (req, res) => {
     session_token: handoff.token,
     redirect: handoff.redirectPath
   });
-});
+}));
 
 authRouter.get('/me', requireAuth, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
   const user = req.sessionUser!;
   const isAdmin = await welfareRepository.hasAdminSubject(user.linuxdoSubject);
   ok(res, {
@@ -194,7 +254,13 @@ authRouter.get('/me', requireAuth, asyncHandler(async (req, res) => {
   });
 }));
 
-authRouter.post('/logout', (_req, res) => {
-  // 不再需要清除 session cookie，前端负责清除 localStorage 中的 token
+authRouter.post('/logout', requireAuth, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  await sessionStateService.revokeToken(
+    req.sessionTokenId!,
+    req.sessionTokenExpiresAtMs!
+  );
+
   ok(res, { message: '已退出登录' });
-});
+}));

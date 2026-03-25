@@ -12,8 +12,6 @@ function applyBaseEnv() {
     WELFARE_CORS_ORIGINS: 'http://localhost:5173',
     WELFARE_JWT_SECRET: 'test-secret-123456',
     WELFARE_JWT_EXPIRES_IN: '7d',
-    WELFARE_COOKIE_SECURE: 'false',
-    WELFARE_SESSION_COOKIE_SAME_SITE: 'lax',
     LINUXDO_CLIENT_ID: 'client-id',
     LINUXDO_CLIENT_SECRET: 'client-secret',
     LINUXDO_AUTHORIZE_URL: 'https://example.com/oauth/authorize',
@@ -42,17 +40,27 @@ describe('config', () => {
     vi.resetModules();
   });
 
-  it('parses jwt duration into cookie max age', async () => {
+  it('accepts valid duration strings', async () => {
     process.env.WELFARE_JWT_EXPIRES_IN = '1.5h';
+    process.env.WELFARE_REVOKED_TOKEN_CLEANUP_INTERVAL = '30m';
 
     const { config } = await import('./config.js');
 
-    expect(config.WELFARE_JWT_MAX_AGE_MS).toBe(5_400_000);
+    expect(config.WELFARE_JWT_EXPIRES_IN).toBe('1.5h');
+    expect(config.WELFARE_REVOKED_TOKEN_CLEANUP_INTERVAL_MS).toBe(1_800_000);
   });
 
-  it('rejects misspelled boolean env values', async () => {
-    process.env.WELFARE_COOKIE_SECURE = 'ture';
+  it('rejects invalid default timezone values', async () => {
+    process.env.DEFAULT_TIMEZONE = 'Not/A_Real_Timezone';
 
-    await expect(import('./config.js')).rejects.toThrow('环境变量校验失败');
+    await expect(import('./config.js')).rejects.toThrow('DEFAULT_TIMEZONE');
+  });
+
+  it('rejects invalid bootstrap admin subjects', async () => {
+    process.env.BOOTSTRAP_ADMIN_SUBJECTS = 'good_subject,bad subject';
+
+    await expect(import('./config.js')).rejects.toThrow(
+      'BOOTSTRAP_ADMIN_SUBJECTS 包含非法 subject'
+    );
   });
 });

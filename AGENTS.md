@@ -11,7 +11,7 @@
 
 ## Architecture Overview
 
-后端负责 LinuxDo OAuth 登录、签到逻辑、管理员配置和 `sub2api` 管理接口调用；前端通过 `credentials: include` 依赖后端写入的 HttpOnly Cookie 维持会话。修改接口、Cookie、CORS 或环境变量时，请同时检查前后端是否需要联动更新。
+后端负责 LinuxDo OAuth 登录、签到逻辑、管理员配置和 `sub2api` 管理接口调用；登录成功后后端会把一次性交接码回跳给前端，前端再换成 Bearer session token，并在后续请求中通过 `Authorization` 头维持会话。修改接口、鉴权、CORS 或环境变量时，请同时检查前后端是否需要联动更新。
 
 ## Build, Test, and Development Commands
 
@@ -36,7 +36,7 @@
 
 ## Testing Guidelines
 
-后端测试框架为 Vitest，按 `src/**/*.test.ts` 匹配，现有用例与源码同目录放置，如 `src/utils/date.test.ts`。新增测试请保持命名一致、执行稳定，并尽量在 60 秒内完成。前端暂未建立自动化测试；改动登录、签到、后台页面时，需手动验证关键流程。
+后端测试框架为 Vitest，按 `src/**/*.test.ts` 匹配，现有用例与源码同目录放置，如 `src/utils/date.test.ts`。新增测试请保持命名一致、执行稳定，并尽量在 60 秒内完成。前端同样使用 Vitest；改动登录、签到、后台页面时，除补充/更新测试外，也需手动验证关键流程。
 
 ## Commit & Pull Request Guidelines
 

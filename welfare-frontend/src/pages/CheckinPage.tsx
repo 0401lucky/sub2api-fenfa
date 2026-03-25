@@ -258,7 +258,7 @@ export function CheckinPage() {
                 {history.map((item) => (
                   <div key={item.id} className="list-item" style={{ gridTemplateColumns: 'minmax(120px, 1fr) 70px auto', padding: '12px 16px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <strong style={{ fontSize: 14 }}>{item.checkin_date}</strong>
+                      <strong style={{ fontSize: 14 }}>{new Date(item.checkin_date).toLocaleDateString()}</strong>
                       <span className="muted" style={{ fontSize: 13 }}>{new Date(item.created_at).toLocaleTimeString()}</span>
                     </div>
                     {renderGrantTag(item.grant_status)}

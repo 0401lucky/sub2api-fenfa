@@ -129,33 +129,64 @@ export function BlindboxRevealOverlay({
 
             <div className="blindbox-core-scene">
               <motion.div
-                className="blindbox-core-shell"
+                className="fortune-cylinder-wrapper"
                 animate={
                   stage === 'charging'
-                    ? { scale: [1, 1.05, 1], rotate: [0, -2, 2, 0] }
+                    ? { rotate: [0, -4, 4, -2, 0], y: [0, -8, 0] }
                     : stage === 'suspense'
-                      ? { scale: [1, 1.08, 1.03, 1], rotate: [0, 2, -2, 0] }
+                      ? { rotate: [0, 14, -14, 10, -10, 6, -6, 0], y: [0, -12, 8, -8, 4, -4, 0] }
                       : stage === 'reveal' || stage === 'resolved'
-                        ? { scale: [1, 1.12, 1], rotate: [0, 0, 0] }
-                        : { scale: 1, rotate: 0 }
+                        ? { rotate: -15, y: 25, filter: 'blur(3px)', opacity: 0.6 }
+                        : { rotate: 0, y: 0 }
                 }
-                transition={{ duration: stage === 'suspense' ? 1.2 : 0.72, repeat: stage === 'resolved' ? 0 : Infinity }}
+                transition={{ duration: stage === 'suspense' ? 0.35 : 0.8, repeat: stage === 'suspense' ? Infinity : 0 }}
               >
-                <div className="blindbox-core-glow" />
-                <div className="blindbox-core-box">
-                  <div className="blindbox-core-lid" />
-                  <div className="blindbox-core-body">
-                    <span>LUCK</span>
-                  </div>
+                <div className="fortune-sticks-container">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="fortune-stick"
+                      animate={
+                        stage === 'suspense'
+                          ? { y: [0, -20, 0, -30, 0], rotate: [0, (i % 2 === 0 ? 6 : -6), 0] }
+                          : stage === 'reveal' || stage === 'resolved'
+                            ? { y: 0, opacity: 0.3 }
+                            : { y: 0 }
+                      }
+                      transition={{ duration: 0.15 + i * 0.05, repeat: Infinity, repeatType: 'reverse' }}
+                    />
+                  ))}
+                </div>
+                
+                <div className="fortune-cylinder">
+                  <div className="fortune-cylinder-label">灵签</div>
                 </div>
               </motion.div>
+
+              <AnimatePresence>
+                {(stage === 'reveal' || stage === 'resolved') && data && (
+                  <motion.div
+                    className="destiny-stick-wrapper"
+                    initial={{ y: 150, scale: 0.4, rotate: -15, opacity: 0 }}
+                    animate={{ y: -70, scale: 1.25, rotate: 0, opacity: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: 'spring', damping: 14, stiffness: 120, mass: 0.8 }}
+                  >
+                    <div className="destiny-stick">
+                      <div className="destiny-stick-text">
+                        {getRevealTone(data?.reward_balance ?? null) === 'jackpot' ? '上上签' : '上吉签'}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {(stage === 'reveal' || stage === 'resolved') && data && (
                 <motion.div
                   className="blindbox-reveal-card"
-                  initial={{ opacity: 0, y: 24, scale: 0.92 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  initial={{ opacity: 0, y: 40, scale: 0.9, filter: 'blur(8px)' }}
+                  animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                  transition={{ duration: 0.6, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <span className="blindbox-reveal-label">{demoMode ? '演示签文' : '今日签文'}</span>
                   <strong>{data.title}</strong>
@@ -173,11 +204,11 @@ export function BlindboxRevealOverlay({
 
             <div className="blindbox-overlay-copy">
               <h2>
-                {stage === 'charging' && '幸运引擎启动中'}
-                {stage === 'suspense' && '签文正在凝结'}
-                {stage === 'reveal' && '今日惊喜揭晓'}
+                {stage === 'charging' && '请握紧签筒'}
+                {stage === 'suspense' && '正在摇出灵签'}
+                {stage === 'reveal' && '今日运势揭晓'}
                 {stage === 'resolved' && (demoMode ? '演示结果已揭晓' : '好运已经落袋')}
-                {stage === 'error' && (demoMode ? '演示未能启动' : '盲盒暂未开启成功')}
+                {stage === 'error' && (demoMode ? '演示未能启动' : '抽签暂未开启成功')}
               </h2>
               <p>{message}</p>
             </div>

@@ -321,7 +321,7 @@ export function CheckinPage() {
         message: '签文正在凝结，今天的好运浓度正在提升。'
       }));
 
-      const result = await requestPromise;
+      const [result] = await Promise.all([requestPromise, wait(2400)]);
       const revealData = {
         title: result.blindbox_title || '惊喜签',
         reward_balance: result.reward_balance,
@@ -422,7 +422,7 @@ export function CheckinPage() {
         message: '演示中的签文正在凝结，你可以专注看动画与结果卡表现。'
       }));
 
-      await wait(520);
+      await wait(2400);
       const revealData = {
         title: demoItem.title,
         reward_balance: demoItem.reward_balance,

@@ -115,7 +115,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ handoff })
     }),
-  getMe: () => request<SessionUser>('/api/auth/me'),
+  getMe: (sessionToken?: string) =>
+    request<SessionUser>('/api/auth/me', {
+      headers: sessionToken
+        ? {
+            Authorization: `Bearer ${sessionToken}`
+          }
+        : undefined
+    }),
   logout: () => request<{ message: string }>('/api/auth/logout', { method: 'POST' }),
   getCheckinStatus: () => request<CheckinStatus>('/api/checkin/status'),
   checkin: () =>

@@ -6,6 +6,7 @@ import { SESSION_TOKEN_STORAGE_KEY } from '../lib/session-token';
 
 const refreshMock = vi.fn();
 const exchangeSessionHandoffMock = vi.fn();
+const getMeMock = vi.fn();
 const mockUseAuth = vi.fn();
 
 vi.mock('../lib/auth', () => ({
@@ -14,7 +15,8 @@ vi.mock('../lib/auth', () => ({
 
 vi.mock('../lib/api', () => ({
   api: {
-    exchangeSessionHandoff: (...args: unknown[]) => exchangeSessionHandoffMock(...args)
+    exchangeSessionHandoff: (...args: unknown[]) => exchangeSessionHandoffMock(...args),
+    getMe: (...args: unknown[]) => getMeMock(...args)
   }
 }));
 
@@ -22,7 +24,16 @@ describe('AuthCallbackPage', () => {
   beforeEach(() => {
     refreshMock.mockReset();
     exchangeSessionHandoffMock.mockReset();
+    getMeMock.mockReset();
     mockUseAuth.mockReset();
+    getMeMock.mockResolvedValue({
+      sub2api_user_id: 1,
+      linuxdo_subject: 'subject',
+      synthetic_email: 'linuxdo-subject@linuxdo-connect.invalid',
+      username: 'tester',
+      avatar_url: null,
+      is_admin: false
+    });
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.replaceState({}, '', '/auth/callback#handoff=handoff-token&redirect=%2Fcheckin');
@@ -128,12 +139,20 @@ describe('AuthCallbackPage', () => {
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('session-token');
   });
 
-  it('会在首次会话校验失败时带着同一个 token 自动重试', async () => {
-    refreshMock
-      .mockResolvedValueOnce(null)
+  it('会在首次直接校验 token 失败时自动重试', async () => {
+    getMeMock
+      .mockRejectedValueOnce(new Error('temporary 401'))
       .mockResolvedValueOnce({
-        sub2api_user_id: 1
+        sub2api_user_id: 1,
+        linuxdo_subject: 'subject',
+        synthetic_email: 'linuxdo-subject@linuxdo-connect.invalid',
+        username: 'tester',
+        avatar_url: null,
+        is_admin: false
       });
+    refreshMock.mockResolvedValue({
+      sub2api_user_id: 1
+    });
     exchangeSessionHandoffMock.mockResolvedValue({
       session_token: 'session-token',
       redirect: '/checkin'
@@ -162,7 +181,8 @@ describe('AuthCallbackPage', () => {
       expect(screen.getByText('签到页')).toBeInTheDocument();
     });
 
-    expect(refreshMock).toHaveBeenCalledTimes(2);
+    expect(getMeMock).toHaveBeenCalledTimes(2);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('session-token');
   });
 });

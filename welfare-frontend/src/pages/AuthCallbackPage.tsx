@@ -7,7 +7,7 @@ import {
   clearAuthCallbackParams,
   exchangeSessionHandoffOnce
 } from '../lib/auth-callback';
-import { getStoredSessionToken, storeSessionToken } from '../lib/session-token';
+import { storeSessionToken } from '../lib/session-token';
 
 async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => {
@@ -15,26 +15,40 @@ async function wait(ms: number): Promise<void> {
   });
 }
 
-async function refreshSessionAfterExchange(
+async function establishSessionAfterExchange(
   sessionToken: string,
   refresh: () => Promise<unknown>
-): Promise<boolean> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (getStoredSessionToken() !== sessionToken) {
-      storeSessionToken(sessionToken);
-    }
+): Promise<'synced' | 'verified' | 'failed'> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    storeSessionToken(sessionToken);
 
-    const user = await refresh();
-    if (user) {
-      return true;
-    }
+    try {
+      const verifiedUser = await api.getMe(sessionToken);
+      if (!verifiedUser) {
+        throw new Error('missing user');
+      }
 
-    if (attempt < 2) {
-      await wait(200 * (attempt + 1));
+      for (let syncAttempt = 0; syncAttempt < 3; syncAttempt += 1) {
+        storeSessionToken(sessionToken);
+        const syncedUser = await refresh();
+        if (syncedUser) {
+          return 'synced';
+        }
+
+        if (syncAttempt < 2) {
+          await wait(120 * (syncAttempt + 1));
+        }
+      }
+
+      return 'verified';
+    } catch {
+      if (attempt < 4) {
+        await wait(200 * (attempt + 1));
+      }
     }
   }
 
-  return false;
+  return 'failed';
 }
 
 export function AuthCallbackPage() {
@@ -76,7 +90,7 @@ export function AuthCallbackPage() {
           }
 
           storeSessionToken(result.session_token);
-          const established = await refreshSessionAfterExchange(
+          const establishment = await establishSessionAfterExchange(
             result.session_token,
             refresh
           );
@@ -84,7 +98,7 @@ export function AuthCallbackPage() {
             return;
           }
 
-          if (!established) {
+          if (establishment === 'failed') {
             clearAuthCallbackParams();
             setIsError(true);
             setMessage('登录失败：会话已换取成功，但校验未通过，请重新登录');
@@ -93,6 +107,10 @@ export function AuthCallbackPage() {
 
           clearAuthCallbackParams();
           setMessage('登录成功，正在跳转...');
+          if (establishment === 'verified') {
+            window.location.assign(result.redirect || redirect);
+            return;
+          }
           navigate(result.redirect || redirect, { replace: true });
         } catch (exchangeError) {
           if (cancelled) {

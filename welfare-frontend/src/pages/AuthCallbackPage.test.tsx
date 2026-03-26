@@ -1,17 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthCallbackPage } from './AuthCallbackPage';
 import { SESSION_TOKEN_STORAGE_KEY } from '../lib/session-token';
 
-const refreshMock = vi.fn();
 const exchangeSessionHandoffMock = vi.fn();
 const getMeMock = vi.fn();
-const mockUseAuth = vi.fn();
-
-vi.mock('../lib/auth', () => ({
-  useAuth: () => mockUseAuth()
-}));
 
 vi.mock('../lib/api', () => ({
   api: {
@@ -22,10 +16,8 @@ vi.mock('../lib/api', () => ({
 
 describe('AuthCallbackPage', () => {
   beforeEach(() => {
-    refreshMock.mockReset();
     exchangeSessionHandoffMock.mockReset();
     getMeMock.mockReset();
-    mockUseAuth.mockReset();
     getMeMock.mockResolvedValue({
       sub2api_user_id: 1,
       linuxdo_subject: 'subject',
@@ -39,20 +31,14 @@ describe('AuthCallbackPage', () => {
     window.history.replaceState({}, '', '/auth/callback#handoff=handoff-token&redirect=%2Fcheckin');
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('会使用 handoff 建立前端 session token 并跳转到目标页', async () => {
-    refreshMock.mockResolvedValue({
-      sub2api_user_id: 1
-    });
     exchangeSessionHandoffMock.mockResolvedValue({
       session_token: 'session-token',
       redirect: '/checkin'
-    });
-    mockUseAuth.mockReturnValue({
-      status: 'loading',
-      user: null,
-      error: null,
-      refresh: refreshMock,
-      logout: vi.fn()
     });
 
     render(
@@ -71,10 +57,10 @@ describe('AuthCallbackPage', () => {
       expect(exchangeSessionHandoffMock).toHaveBeenCalledWith('handoff-token');
     });
     await waitFor(() => {
-      expect(refreshMock).toHaveBeenCalledTimes(1);
+      expect(getMeMock).toHaveBeenCalledWith('session-token');
     });
     await waitFor(() => {
-      expect(screen.getByText('签到页')).toBeInTheDocument();
+      expect(screen.getByText('登录成功，正在跳转...')).toBeInTheDocument();
     });
 
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('session-token');
@@ -82,9 +68,6 @@ describe('AuthCallbackPage', () => {
   });
 
   it('在回调页被重新挂载时也只会交换一次 handoff 并完成登录', async () => {
-    refreshMock.mockResolvedValue({
-      sub2api_user_id: 1
-    });
     exchangeSessionHandoffMock.mockImplementation(
       async () =>
         await new Promise<{ session_token: string; redirect: string }>((resolve) => {
@@ -96,13 +79,6 @@ describe('AuthCallbackPage', () => {
           }, 0);
         })
     );
-    mockUseAuth.mockReturnValue({
-      status: 'loading',
-      user: null,
-      error: null,
-      refresh: refreshMock,
-      logout: vi.fn()
-    });
 
     const firstRender = render(
       <MemoryRouter
@@ -132,7 +108,7 @@ describe('AuthCallbackPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('签到页')).toBeInTheDocument();
+      expect(screen.getByText('登录成功，正在跳转...')).toBeInTheDocument();
     });
 
     expect(exchangeSessionHandoffMock).toHaveBeenCalledTimes(1);
@@ -150,19 +126,9 @@ describe('AuthCallbackPage', () => {
         avatar_url: null,
         is_admin: false
       });
-    refreshMock.mockResolvedValue({
-      sub2api_user_id: 1
-    });
     exchangeSessionHandoffMock.mockResolvedValue({
       session_token: 'session-token',
       redirect: '/checkin'
-    });
-    mockUseAuth.mockReturnValue({
-      status: 'loading',
-      user: null,
-      error: null,
-      refresh: refreshMock,
-      logout: vi.fn()
     });
 
     render(
@@ -178,11 +144,10 @@ describe('AuthCallbackPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('签到页')).toBeInTheDocument();
+      expect(screen.getByText('登录成功，正在跳转...')).toBeInTheDocument();
     });
 
     expect(getMeMock).toHaveBeenCalledTimes(2);
-    expect(refreshMock).toHaveBeenCalledTimes(1);
     expect(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY)).toBe('session-token');
   });
 });

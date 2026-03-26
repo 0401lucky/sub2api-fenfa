@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import {
   captureAuthCallbackParams,
@@ -15,45 +14,29 @@ async function wait(ms: number): Promise<void> {
   });
 }
 
-async function establishSessionAfterExchange(
-  sessionToken: string,
-  refresh: () => Promise<unknown>
-): Promise<'synced' | 'verified' | 'failed'> {
+async function verifySessionToken(sessionToken: string): Promise<boolean> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     storeSessionToken(sessionToken);
 
     try {
       const verifiedUser = await api.getMe(sessionToken);
-      if (!verifiedUser) {
-        throw new Error('missing user');
+      if (verifiedUser) {
+        return true;
       }
-
-      for (let syncAttempt = 0; syncAttempt < 3; syncAttempt += 1) {
-        storeSessionToken(sessionToken);
-        const syncedUser = await refresh();
-        if (syncedUser) {
-          return 'synced';
-        }
-
-        if (syncAttempt < 2) {
-          await wait(120 * (syncAttempt + 1));
-        }
-      }
-
-      return 'verified';
     } catch {
-      if (attempt < 4) {
-        await wait(200 * (attempt + 1));
-      }
+      // 忽略单次校验失败，做短重试
+    }
+
+    if (attempt < 4) {
+      await wait(200 * (attempt + 1));
     }
   }
 
-  return 'failed';
+  return false;
 }
 
 export function AuthCallbackPage() {
   const navigate = useNavigate();
-  const { status, user, error: authError, refresh } = useAuth();
   const [message, setMessage] = useState('正在处理登录回调...');
   const [isError, setIsError] = useState(false);
   const handoffHandledRef = useRef(false);
@@ -90,15 +73,12 @@ export function AuthCallbackPage() {
           }
 
           storeSessionToken(result.session_token);
-          const establishment = await establishSessionAfterExchange(
-            result.session_token,
-            refresh
-          );
+          const verified = await verifySessionToken(result.session_token);
           if (cancelled) {
             return;
           }
 
-          if (establishment === 'failed') {
+          if (!verified) {
             clearAuthCallbackParams();
             setIsError(true);
             setMessage('登录失败：会话已换取成功，但校验未通过，请重新登录');
@@ -107,11 +87,7 @@ export function AuthCallbackPage() {
 
           clearAuthCallbackParams();
           setMessage('登录成功，正在跳转...');
-          if (establishment === 'verified') {
-            window.location.assign(result.redirect || redirect);
-            return;
-          }
-          navigate(result.redirect || redirect, { replace: true });
+          window.location.replace(result.redirect || redirect);
         } catch (exchangeError) {
           if (cancelled) {
             return;
@@ -144,47 +120,16 @@ export function AuthCallbackPage() {
       return () => window.clearTimeout(timeout);
     }
 
-    if (status === 'loading') {
-      setIsError(false);
-      setMessage('正在处理登录回调...');
-      return;
-    }
-
-    if (status === 'authenticated' && user) {
-      clearAuthCallbackParams();
-      setIsError(false);
-      setMessage('登录成功，正在跳转...');
-      navigate(redirect, { replace: true });
-      return;
-    }
-
-    if (status === 'error') {
-      setIsError(true);
-      setMessage(`登录状态校验失败：${authError || '服务暂时不可用，请稍后重试'}`);
-      return;
-    }
-
     clearAuthCallbackParams();
     setIsError(true);
-    setMessage('登录失败：未建立有效会话');
+    setMessage('登录失败：未建立有效回调参数');
     const timeout = window.setTimeout(() => {
       navigate('/login', { replace: true });
     }, 1500);
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [
-    authError,
-    callbackCapture.shouldClearUrl,
-    detail,
-    error,
-    handoff,
-    navigate,
-    redirect,
-    refresh,
-    status,
-    user
-  ]);
+  }, [callbackCapture.shouldClearUrl, detail, error, handoff, navigate, redirect]);
 
   return (
     <div className="page page-center">

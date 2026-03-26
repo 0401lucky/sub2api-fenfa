@@ -37,6 +37,12 @@ const initialBlindboxRevealState: BlindboxRevealState = {
   demoMode: false
 };
 
+const blindboxDemoFallbackItems: BlindboxPreviewItem[] = [
+  { id: -1, title: '演示·安稳签', reward_balance: 8 },
+  { id: -2, title: '演示·好运签', reward_balance: 15 },
+  { id: -3, title: '演示·头奖签', reward_balance: 30 }
+];
+
 async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -374,7 +380,11 @@ export function CheckinPage() {
       return;
     }
 
-    const demoItem = pickBlindboxDemoItem(status?.blindbox_preview.items ?? []);
+    const demoSourceItems =
+      (status?.blindbox_preview.items?.length ?? 0) > 0
+        ? status?.blindbox_preview.items ?? []
+        : blindboxDemoFallbackItems;
+    const demoItem = pickBlindboxDemoItem(demoSourceItems);
     if (!demoItem) {
       setError('当前没有可用于演示的盲盒奖项');
       return;
@@ -389,7 +399,10 @@ export function CheckinPage() {
       open: true,
       stage: 'charging',
       data: null,
-      message: '管理员演示模式已启动：这次开盒不会写入签到记录。',
+      message:
+        (status?.blindbox_preview.items?.length ?? 0) > 0
+          ? '管理员演示模式已启动：本次会复用当前奖池做视觉演示，不写入签到记录。'
+          : '管理员演示模式已启动：当前奖池为空，已切换到内置演示签文，不写入签到记录。',
       canSkip: false,
       demoMode: true
     });
@@ -665,13 +678,17 @@ export function CheckinPage() {
                   {user?.is_admin && (
                     <div className="blindbox-demo-hint">
                       <button
-                        className="button ghost blindbox-demo-button"
-                        disabled={blindboxReveal.open || submittingMode != null || (status?.blindbox_preview.item_count ?? 0) === 0}
+                        className="button blindbox-demo-button"
+                        disabled={blindboxReveal.open || submittingMode != null}
                         onClick={handleBlindboxDemo}
                       >
                         管理员演示开盒
                       </button>
-                      <span>不写签到记录，不发奖励，只用于测试动效与结果卡</span>
+                      <span>
+                        {(status?.blindbox_preview.item_count ?? 0) > 0
+                          ? '不写签到记录，不发奖励，只用于测试动效与结果卡'
+                          : '当前奖池为空时会自动使用内置演示签文，便于先测试动画与视觉表现'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -689,7 +706,9 @@ export function CheckinPage() {
                       </span>
                     ))}
                     {status?.blindbox_preview.items.length === 0 && (
-                      <div className="empty-state">当前没有可展示的盲盒奖项。</div>
+                      <div className="empty-state">
+                        当前没有可展示的盲盒奖项。管理员仍可使用“演示开盒”测试动画与结果卡。
+                      </div>
                     )}
                   </div>
                   {status?.selected_mode === 'blindbox' && status.blindbox_result?.title && (

@@ -91,7 +91,8 @@ describe('reset service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'Asia/Shanghai',
       resetEnabled: true,
       resetThresholdBalance: 20,
@@ -126,7 +127,8 @@ describe('reset service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'Asia/Shanghai',
       resetEnabled: true,
       resetThresholdBalance: 20,
@@ -190,7 +192,8 @@ describe('reset service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'Asia/Shanghai',
       resetEnabled: false,
       resetThresholdBalance: 20,
@@ -214,7 +217,8 @@ describe('reset service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'Asia/Shanghai',
       resetEnabled: true,
       resetThresholdBalance: 20,
@@ -242,7 +246,8 @@ describe('reset service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'Asia/Shanghai',
       resetEnabled: true,
       resetThresholdBalance: 20,
@@ -285,7 +290,8 @@ describe('reset service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'Asia/Shanghai',
       resetEnabled: true,
       resetThresholdBalance: 20,

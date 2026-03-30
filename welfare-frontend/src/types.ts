@@ -39,7 +39,8 @@ export interface CheckinStatus {
   blindbox_enabled: boolean;
   timezone: string;
   checkin_date: string;
-  daily_reward_balance: number;
+  daily_reward_min_balance: number;
+  daily_reward_max_balance: number;
   checked_in: boolean;
   selected_mode: CheckinMode | null;
   can_checkin_normal: boolean;
@@ -76,7 +77,8 @@ export interface RedeemHistoryItem {
 export interface AdminSettings {
   checkin_enabled: boolean;
   blindbox_enabled: boolean;
-  daily_reward_balance: number;
+  daily_reward_min_balance: number;
+  daily_reward_max_balance: number;
   timezone: string;
   reset_enabled: boolean;
   reset_threshold_balance: number;

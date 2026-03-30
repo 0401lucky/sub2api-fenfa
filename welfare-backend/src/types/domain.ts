@@ -17,7 +17,8 @@ export type CheckinMode = 'normal' | 'blindbox';
 export interface WelfareSettings {
   checkinEnabled: boolean;
   blindboxEnabled: boolean;
-  dailyRewardBalance: number;
+  dailyRewardMinBalance: number;
+  dailyRewardMaxBalance: number;
   timezone: string;
   resetEnabled: boolean;
   resetThresholdBalance: number;

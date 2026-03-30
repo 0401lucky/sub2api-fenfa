@@ -188,7 +188,8 @@ function parseOptionalDateTime(value: string | null | undefined) {
 const settingsUpdateSchema = z.object({
   checkin_enabled: z.boolean().optional(),
   blindbox_enabled: z.boolean().optional(),
-  daily_reward_balance: z.number().positive().optional(),
+  daily_reward_min_balance: z.number().positive().optional(),
+  daily_reward_max_balance: z.number().positive().optional(),
   timezone: z.string().min(1).optional(),
   reset_enabled: z.boolean().optional(),
   reset_threshold_balance: z.number().min(0).optional(),
@@ -308,7 +309,8 @@ adminRouter.get('/overview', asyncHandler(async (_req, res) => {
     settings: {
       checkin_enabled: settings.checkinEnabled,
       blindbox_enabled: settings.blindboxEnabled,
-      daily_reward_balance: settings.dailyRewardBalance,
+      daily_reward_min_balance: settings.dailyRewardMinBalance,
+      daily_reward_max_balance: settings.dailyRewardMaxBalance,
       timezone: settings.timezone,
       reset_enabled: settings.resetEnabled,
       reset_threshold_balance: settings.resetThresholdBalance,
@@ -326,7 +328,8 @@ adminRouter.get('/settings', asyncHandler(async (_req, res) => {
   ok(res, {
     checkin_enabled: settings.checkinEnabled,
     blindbox_enabled: settings.blindboxEnabled,
-    daily_reward_balance: settings.dailyRewardBalance,
+    daily_reward_min_balance: settings.dailyRewardMinBalance,
+    daily_reward_max_balance: settings.dailyRewardMaxBalance,
     timezone: settings.timezone,
     reset_enabled: settings.resetEnabled,
     reset_threshold_balance: settings.resetThresholdBalance,
@@ -350,10 +353,19 @@ adminRouter.put('/settings', asyncHandler(async (req, res) => {
   }
 
   const currentSettings = await checkinService.getAdminSettings();
+  const nextRewardMin =
+    payload.daily_reward_min_balance ?? currentSettings.dailyRewardMinBalance;
+  const nextRewardMax =
+    payload.daily_reward_max_balance ?? currentSettings.dailyRewardMaxBalance;
   const nextThreshold =
     payload.reset_threshold_balance ?? currentSettings.resetThresholdBalance;
   const nextTarget =
     payload.reset_target_balance ?? currentSettings.resetTargetBalance;
+
+  if (nextRewardMax < nextRewardMin) {
+    fail(res, 400, 'BAD_REQUEST', 'daily_reward_max_balance 不能小于 daily_reward_min_balance');
+    return;
+  }
 
   if (nextTarget <= nextThreshold) {
     fail(res, 400, 'BAD_REQUEST', 'reset_target_balance 必须大于 reset_threshold_balance');
@@ -363,7 +375,8 @@ adminRouter.put('/settings', asyncHandler(async (req, res) => {
   const settings = await checkinService.updateAdminSettings({
     checkinEnabled: payload.checkin_enabled,
     blindboxEnabled: payload.blindbox_enabled,
-    dailyRewardBalance: payload.daily_reward_balance,
+    dailyRewardMinBalance: payload.daily_reward_min_balance,
+    dailyRewardMaxBalance: payload.daily_reward_max_balance,
     timezone: payload.timezone,
     resetEnabled: payload.reset_enabled,
     resetThresholdBalance: payload.reset_threshold_balance,
@@ -374,7 +387,8 @@ adminRouter.put('/settings', asyncHandler(async (req, res) => {
   ok(res, {
     checkin_enabled: settings.checkinEnabled,
     blindbox_enabled: settings.blindboxEnabled,
-    daily_reward_balance: settings.dailyRewardBalance,
+    daily_reward_min_balance: settings.dailyRewardMinBalance,
+    daily_reward_max_balance: settings.dailyRewardMaxBalance,
     timezone: settings.timezone,
     reset_enabled: settings.resetEnabled,
     reset_threshold_balance: settings.resetThresholdBalance,

@@ -1,11 +1,14 @@
 import { Icon } from './Icon';
 import { formatAdminBusinessDate, formatAdminDateTime } from '../lib/admin-format';
+import { formatRewardRange } from '../lib/welfare-display';
 import type { AdminCheckinItem, AdminCheckinList, AdminCheckinQuery, AdminSettings, DailyStats } from '../types';
 
 interface AdminCheckinsPanelProps {
   settings: AdminSettings | null;
-  dailyRewardInput: string;
-  onDailyRewardInputChange: (value: string) => void;
+  dailyRewardMinInput: string;
+  dailyRewardMaxInput: string;
+  onDailyRewardMinInputChange: (value: string) => void;
+  onDailyRewardMaxInputChange: (value: string) => void;
   onSettingsChange: (next: AdminSettings) => void;
   stats: DailyStats | null;
   saving: boolean;
@@ -49,8 +52,10 @@ function getUserIdentity(item: Pick<AdminCheckinItem, 'sub2apiUsername' | 'sub2a
 
 export function AdminCheckinsPanel({
   settings,
-  dailyRewardInput,
-  onDailyRewardInputChange,
+  dailyRewardMinInput,
+  dailyRewardMaxInput,
+  onDailyRewardMinInputChange,
+  onDailyRewardMaxInputChange,
   onSettingsChange,
   stats,
   saving,
@@ -94,13 +99,23 @@ export function AdminCheckinsPanel({
                 />
               </label>
               <label className="field">
-                <span>每日奖励余额</span>
+                <span>奖励最小值</span>
                 <input
                   type="number"
                   step="0.01"
                   min="0.01"
-                  value={dailyRewardInput}
-                  onChange={(event) => onDailyRewardInputChange(event.target.value)}
+                  value={dailyRewardMinInput}
+                  onChange={(event) => onDailyRewardMinInputChange(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>奖励最大值</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={dailyRewardMaxInput}
+                  onChange={(event) => onDailyRewardMaxInputChange(event.target.value)}
                 />
               </label>
               <label className="field">
@@ -131,6 +146,12 @@ export function AdminCheckinsPanel({
               </label>
             </div>
             <div className="form-actions">
+              <div className="muted" style={{ marginBottom: 12 }}>
+                当前普通签到区间：{formatRewardRange(
+                  settings.daily_reward_min_balance,
+                  settings.daily_reward_max_balance
+                )}
+              </div>
               <button className="button primary" onClick={() => void onSaveSettings()} disabled={saving}>
                 {saving ? '保存中...' : '保存设置'}
               </button>

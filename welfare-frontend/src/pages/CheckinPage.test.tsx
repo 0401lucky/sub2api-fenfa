@@ -46,7 +46,8 @@ describe('CheckinPage', () => {
       blindbox_enabled: true,
       timezone: 'Asia/Shanghai',
       checkin_date: '2026-03-25',
-      daily_reward_balance: 10,
+      daily_reward_min_balance: 10,
+      daily_reward_max_balance: 20,
       checked_in: false,
       selected_mode: null,
       can_checkin_normal: true,
@@ -130,7 +131,7 @@ describe('CheckinPage', () => {
       </MemoryRouter>
     );
 
-    const button = await screen.findByRole('button', { name: '领取固定奖励' });
+    const button = await screen.findByRole('button', { name: '普通签到' });
     fireEvent.click(button);
 
     await waitFor(() => {

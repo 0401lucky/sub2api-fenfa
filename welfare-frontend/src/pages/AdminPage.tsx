@@ -49,42 +49,42 @@ const sections: Array<{
     id: 'overview',
     label: '总览',
     title: '运营总览',
-    description: '先看状态、问题和近期趋势，再决定要进入哪条业务线。',
+    description: '先看状态、异常和趋势。',
     icon: 'grid'
   },
   {
     id: 'checkins',
     label: '签到管理',
     title: '签到控制',
-    description: '维护签到配置、观察趋势并处理失败流水。',
+    description: '配置签到规则并处理失败流水。',
     icon: 'bolt'
   },
   {
     id: 'resetRecords',
     label: '额度重置',
     title: '重置控制台',
-    description: '管理用户直接重置规则，追踪补差额流水与失败原因。',
+    description: '管理重置规则和补差流水。',
     icon: 'grid'
   },
   {
     id: 'redeemCodes',
     label: '兑换码',
     title: '兑换码资产池',
-    description: '创建活动码、调整启停状态，控制活动额度与人数上限。',
+    description: '管理兑换码和活动额度。',
     icon: 'ticket'
   },
   {
     id: 'redeemClaims',
     label: '兑换记录',
     title: '兑换记录台',
-    description: '排查兑换失败、补发异常和重复请求。',
+    description: '处理兑换失败和补发异常。',
     icon: 'chart'
   },
   {
     id: 'whitelist',
     label: '管理员',
     title: '权限白名单',
-    description: '维护后台访问名单，确保只有运营账号可进入控制台。',
+    description: '维护后台访问名单。',
     icon: 'users'
   }
 ];
@@ -94,7 +94,8 @@ export function AdminPage() {
   const { user, logout } = useAuth();
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [settings, setSettings] = useState<AdminSettings | null>(null);
-  const [dailyRewardInput, setDailyRewardInput] = useState('');
+  const [dailyRewardMinInput, setDailyRewardMinInput] = useState('');
+  const [dailyRewardMaxInput, setDailyRewardMaxInput] = useState('');
   const [stats, setStats] = useState<DailyStats | null>(null);
   const [checkinList, setCheckinList] = useState<AdminCheckinList | null>(null);
   const [checkinFilters, setCheckinFilters] = useState<AdminCheckinQuery>(defaultCheckinFilters);
@@ -155,7 +156,8 @@ export function AdminPage() {
         api.listAdminRedeemClaims({ page: 1, page_size: 4, grant_status: 'failed' })
       ]);
       setSettings(overview.settings);
-      setDailyRewardInput(String(overview.settings.daily_reward_balance));
+      setDailyRewardMinInput(String(overview.settings.daily_reward_min_balance));
+      setDailyRewardMaxInput(String(overview.settings.daily_reward_max_balance));
       setStats(overview.stats);
       setWhitelist(overview.whitelist);
       setOverviewRedeemCodes(redeemCodes);
@@ -205,9 +207,20 @@ export function AdminPage() {
 
   async function saveSettings() {
     if (!settings) return;
-    const parsedReward = Number(dailyRewardInput);
-    if (!Number.isFinite(parsedReward) || parsedReward <= 0) {
-      setError('每日奖励余额必须大于 0');
+    const parsedMinReward = Number(dailyRewardMinInput);
+    const parsedMaxReward = Number(dailyRewardMaxInput);
+    if (!Number.isFinite(parsedMinReward) || parsedMinReward <= 0) {
+      setError('签到奖励最小值必须大于 0');
+      setMessage('');
+      return;
+    }
+    if (!Number.isFinite(parsedMaxReward) || parsedMaxReward <= 0) {
+      setError('签到奖励最大值必须大于 0');
+      setMessage('');
+      return;
+    }
+    if (parsedMaxReward < parsedMinReward) {
+      setError('签到奖励最大值不能小于最小值');
       setMessage('');
       return;
     }
@@ -217,10 +230,12 @@ export function AdminPage() {
     try {
       const updated = await api.updateAdminSettings({
         ...settings,
-        daily_reward_balance: parsedReward
+        daily_reward_min_balance: parsedMinReward,
+        daily_reward_max_balance: parsedMaxReward
       });
       setSettings(updated);
-      setDailyRewardInput(String(updated.daily_reward_balance));
+      setDailyRewardMinInput(String(updated.daily_reward_min_balance));
+      setDailyRewardMaxInput(String(updated.daily_reward_max_balance));
       setMessage('设置保存成功');
     } catch (err) {
       if (isUnauthorizedError(err)) {
@@ -549,8 +564,10 @@ export function AdminPage() {
             <>
               <AdminCheckinsPanel
                 settings={settings}
-                dailyRewardInput={dailyRewardInput}
-                onDailyRewardInputChange={setDailyRewardInput}
+                dailyRewardMinInput={dailyRewardMinInput}
+                dailyRewardMaxInput={dailyRewardMaxInput}
+                onDailyRewardMinInputChange={setDailyRewardMinInput}
+                onDailyRewardMaxInputChange={setDailyRewardMaxInput}
                 onSettingsChange={setSettings}
                 stats={stats}
                 saving={saving}

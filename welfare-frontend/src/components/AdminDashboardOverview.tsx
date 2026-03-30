@@ -1,5 +1,6 @@
 import { Icon } from './Icon';
 import { formatAdminBusinessDate, formatAdminDateTime } from '../lib/admin-format';
+import { formatRewardRange } from '../lib/welfare-display';
 import type { AdminCheckinItem, AdminRedeemClaimItem, AdminRedeemCodeItem, AdminSettings, DailyStats, WhitelistItem } from '../types';
 
 interface AdminDashboardOverviewProps {
@@ -79,8 +80,13 @@ export function AdminDashboardOverview({
     },
     {
       label: '每日奖励',
-      value: String(settings?.daily_reward_balance ?? '-'),
-      note: '按业务时区自动发放的固定额度',
+      value: settings
+        ? formatRewardRange(
+            settings.daily_reward_min_balance,
+            settings.daily_reward_max_balance
+          )
+        : '-',
+      note: '普通签到按该区间随机发放',
       badge: '基础配置',
       icon: 'gift' as const,
       tone: 'neutral'
@@ -128,7 +134,7 @@ export function AdminDashboardOverview({
           <div className="admin-hero-copy" style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: 32, fontWeight: 800 }}>福利站运行态势</h2>
             <p style={{ fontSize: 15, color: 'var(--ink-2)' }}>
-              将异常处理、活动码调度与核销放进极简工作台中。掌控全局脉络，洞察流水异常。
+              核心状态与异常一屏查看。
             </p>
           </div>
           <div className="admin-hero-actions">

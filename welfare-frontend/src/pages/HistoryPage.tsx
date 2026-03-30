@@ -65,9 +65,7 @@ export function HistoryPage() {
         <motion.section variants={staggerItem} className="panel utility-hero">
           <span className="eyebrow">Activity Timeline</span>
           <h1 className="hero-title utility-title">记录总览</h1>
-          <p className="lead utility-lead">
-            把签到记录和兑换记录拆成独立视图，后续继续加福利类型时不需要回头重排签到页。
-          </p>
+          <p className="lead utility-lead">签到和兑换记录统一在这里查看。</p>
           <div className="history-tabbar" role="tablist" aria-label="记录切换">
             <button
               type="button"

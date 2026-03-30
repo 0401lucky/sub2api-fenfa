@@ -217,7 +217,8 @@ describe('checkin service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 20,
+      dailyRewardMinBalance: 20,
+      dailyRewardMaxBalance: 20,
       timezone: 'Asia/Shanghai'
     });
     repository.getCheckinByDate.mockResolvedValue(failedRecord);
@@ -265,7 +266,8 @@ describe('checkin service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: stalePending.rewardBalance,
+      dailyRewardMinBalance: stalePending.rewardBalance,
+      dailyRewardMaxBalance: stalePending.rewardBalance,
       timezone: 'UTC'
     });
     repository.getCheckinByDate.mockResolvedValue(stalePending);
@@ -304,7 +306,8 @@ describe('checkin service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: freshPending.rewardBalance,
+      dailyRewardMinBalance: freshPending.rewardBalance,
+      dailyRewardMaxBalance: freshPending.rewardBalance,
       timezone: 'UTC'
     });
     repository.getCheckinByDate.mockResolvedValue(freshPending);
@@ -325,12 +328,62 @@ describe('checkin service', () => {
     vi.useRealTimers();
   });
 
+  it('普通签到会按配置区间随机奖励', async () => {
+    repository.getSettings.mockResolvedValue({
+      checkinEnabled: true,
+      blindboxEnabled: true,
+      dailyRewardMinBalance: 50,
+      dailyRewardMaxBalance: 100,
+      timezone: 'UTC'
+    });
+    repository.getCheckinByDate.mockResolvedValueOnce(null);
+    repository.createCheckinPending.mockResolvedValue({
+      id: 21,
+      sub2apiUserId: 42,
+      sub2apiEmail: 'linuxdo-user@linuxdo-connect.invalid',
+      sub2apiUsername: 'linuxdo-user',
+      linuxdoSubject: 'linuxdo-user',
+      checkinDate: '2026-03-06',
+      checkinMode: 'normal',
+      blindboxItemId: null,
+      blindboxTitle: '',
+      rewardBalance: 87.5,
+      idempotencyKey: 'welfare-checkin:normal:42:2026-03-06',
+      grantStatus: 'pending',
+      grantError: '',
+      sub2apiRequestId: '',
+      createdAt: '2026-03-06T10:00:00.000Z',
+      updatedAt: '2026-03-06T10:00:00.000Z'
+    });
+    repository.markCheckinSuccess.mockResolvedValue(undefined);
+    sub2api.addUserBalance.mockResolvedValue({
+      newBalance: 187.5,
+      requestId: 'req-ranged-reward'
+    });
+
+    const result = await service.checkin({
+      sub2apiUserId: 42,
+      email: 'linuxdo-user@linuxdo-connect.invalid',
+      linuxdoSubject: 'linuxdo-user',
+      username: 'tester',
+      avatarUrl: null
+    });
+
+    expect(repository.createCheckinPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rewardBalance: 87.5
+      })
+    );
+    expect(result.reward_balance).toBe(87.5);
+  });
+
   it('盲盒签到会抽中奖项并快照奖励值', async () => {
     const blindboxItems = createBlindboxItems();
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'UTC'
     });
     repository.getCheckinByDate.mockResolvedValueOnce(null);
@@ -396,7 +449,8 @@ describe('checkin service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'UTC'
     });
     repository.getCheckinByDate.mockResolvedValue(createNormalFailedRecord());
@@ -423,7 +477,8 @@ describe('checkin service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: false,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'UTC'
     });
     repository.getCheckinByDate.mockResolvedValue(failedBlindbox);
@@ -457,7 +512,8 @@ describe('checkin service', () => {
     repository.getSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: false,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 10,
       timezone: 'UTC'
     });
     repository.getCheckinByDate.mockResolvedValue(null);

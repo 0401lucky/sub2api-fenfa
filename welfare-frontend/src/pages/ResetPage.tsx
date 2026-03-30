@@ -110,9 +110,7 @@ export function ResetPage() {
             <div>
               <span className="eyebrow">Quota Reset</span>
               <h1 className="hero-title utility-title">额度重置</h1>
-              <p className="lead utility-lead">
-                当余额低于阈值时，可直接补到目标值。规则由后台统一配置，并附带冷却期控制。
-              </p>
+              <p className="lead utility-lead">低于阈值时，可直接补到目标值。</p>
             </div>
             <div className={`reset-availability ${status?.can_apply ? 'ready' : 'locked'}`}>
               <strong>{status?.can_apply ? '可立即重置' : '当前不可重置'}</strong>

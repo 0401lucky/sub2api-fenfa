@@ -126,7 +126,8 @@ describe('adminRouter', () => {
     mockCheckinService.getAdminSettings.mockResolvedValue({
       checkinEnabled: true,
       blindboxEnabled: true,
-      dailyRewardBalance: 10,
+      dailyRewardMinBalance: 10,
+      dailyRewardMaxBalance: 20,
       timezone: 'Asia/Shanghai',
       resetEnabled: true,
       resetThresholdBalance: 20,
@@ -151,7 +152,8 @@ describe('adminRouter', () => {
     expect(response.body.data.settings).toEqual({
       checkin_enabled: true,
       blindbox_enabled: true,
-      daily_reward_balance: 10,
+      daily_reward_min_balance: 10,
+      daily_reward_max_balance: 20,
       timezone: 'Asia/Shanghai',
       reset_enabled: true,
       reset_threshold_balance: 20,

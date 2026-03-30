@@ -5,7 +5,7 @@ import { BlindboxRevealOverlay, type BlindboxRevealStage } from '../components/B
 import { useAuth } from '../lib/auth';
 import { api, isUnauthorizedError } from '../lib/api';
 import { pageVariants, staggerContainer, staggerItem } from '../lib/animations';
-import { getModeLabel } from '../lib/welfare-display';
+import { formatRewardRange, getModeLabel } from '../lib/welfare-display';
 import type {
   BlindboxPreviewItem,
   CheckinMode,
@@ -65,7 +65,7 @@ function getNormalActionLabel(status: CheckinStatus | null, submittingMode: Chec
   if (status.selected_mode === 'normal' && status.can_checkin_normal) {
     return '继续处理普通签到';
   }
-  return '领取固定奖励';
+  return '普通签到';
 }
 
 function getBlindboxActionLabel(status: CheckinStatus | null, submittingMode: CheckinMode | null): string {
@@ -95,56 +95,56 @@ function getBlindboxActionLabel(status: CheckinStatus | null, submittingMode: Ch
 
 function getNormalStatusNote(status: CheckinStatus | null): string {
   if (!status) {
-    return '固定奖励，稳定到账。适合今天只想稳稳领额度。';
+    return '按后台区间随机发放。';
   }
   if (!status.checkin_enabled) {
-    return '当前签到功能已关闭，请稍后再试。';
+    return '签到已关闭。';
   }
   if (status.selected_mode === 'blindbox') {
-    return '你今天已经选择了惊喜签到，普通签到资格已关闭。';
+    return '今天已选盲盒。';
   }
   if (status.selected_mode === 'normal' && status.grant_status === 'failed') {
-    return '今天的普通签到奖励已锁定，可以继续重试本次发放。';
+    return '本次奖励已锁定，可继续重试。';
   }
   if (status.selected_mode === 'normal' && status.grant_status === 'pending') {
     return status.can_checkin_normal
-      ? '普通签到记录已超时，可继续接管本次发放。'
-      : '普通签到已进入处理中，请稍后刷新。';
+      ? '可继续接管这次发放。'
+      : '正在处理中。';
   }
   if (status.selected_mode === 'normal' && status.grant_status === 'success') {
-    return '今日固定奖励已经到账，明天再来继续稳领。';
+    return '今日已到账。';
   }
-  return '固定奖励，稳定到账。适合今天只想稳稳领额度。';
+  return '按后台区间随机发放。';
 }
 
 function getBlindboxStatusNote(status: CheckinStatus | null): string {
   if (!status) {
-    return '风险型惊喜签到。奖励可能低于，也可能高于普通签到。';
+    return '奖励由奖池决定。';
   }
   if (status.selected_mode === 'normal') {
-    return '今天已经完成普通签到，盲盒入口会在下一个业务日重新开放。';
+    return '今天已完成普通签到。';
   }
   if (status.selected_mode === 'blindbox' && status.grant_status === 'failed') {
-    return `今天的盲盒结果已锁定为「${status.blindbox_result?.title ?? '惊喜签'}」，可继续重试本次发放。`;
+    return `结果已锁定：${status.blindbox_result?.title ?? '惊喜签'}。`;
   }
   if (status.selected_mode === 'blindbox' && status.grant_status === 'pending') {
     return status.can_checkin_blindbox
-      ? `盲盒结果「${status.blindbox_result?.title ?? '惊喜签'}」已锁定，可继续处理这次发放。`
-      : `盲盒结果「${status.blindbox_result?.title ?? '惊喜签'}」正在发放中，请稍后刷新。`;
+      ? `结果已锁定：${status.blindbox_result?.title ?? '惊喜签'}。`
+      : '正在处理中。';
   }
   if (status.selected_mode === 'blindbox' && status.grant_status === 'success') {
-    return `今天已经抽中「${status.blindbox_result?.title ?? '惊喜签'}」，明天再来开启新的好运。`;
+    return `已抽中：${status.blindbox_result?.title ?? '惊喜签'}。`;
   }
   if (!status.checkin_enabled) {
-    return '当前签到功能已关闭，暂时无法开启盲盒。';
+    return '签到已关闭。';
   }
   if (!status.blindbox_enabled) {
-    return '盲盒签到暂未开放，你仍可选择普通签到。';
+    return '盲盒未开放。';
   }
   if (status.blindbox_preview.item_count === 0) {
-    return '当前盲盒奖池未配置可用奖项，请先选择普通签到。';
+    return '当前没有可用奖项。';
   }
-  return '风险型惊喜签到。奖励可能低于，也可能高于普通签到。';
+  return '奖励由奖池决定。';
 }
 
 function getBlindboxRangeLabel(status: CheckinStatus | null): string {
@@ -477,7 +477,7 @@ export function CheckinPage() {
           </div>
           <div className="stack checkin-header-note">
             <strong>今日模式只会生成一条签到记录</strong>
-            <span className="muted">兑换福利码、查看历史记录和额度重置已移到顶部导航</span>
+            <span className="muted">其他功能在顶部导航</span>
           </div>
         </motion.header>
 
@@ -491,14 +491,21 @@ export function CheckinPage() {
               <h2 className="fortune-title">DAILY CHECK-IN</h2>
               <p className="fortune-title-shadow">MODE SELECTOR</p>
               <p className="fortune-copy">
-                普通签到稳稳到账，惊喜签到搏一把高奖励。每天只会生成一条签到记录，请在两种模式中做出选择。
+                普通签到按区间随机发放，盲盒走奖池。每天只能选一种模式。
               </p>
             </div>
             <div className="fortune-meta-grid">
               <div className="fortune-meta-card">
-                <span className="fortune-meta-label">固定奖励</span>
-                <strong>+{status?.daily_reward_balance.toFixed(2)}</strong>
-                <small>普通签到直接到账</small>
+                <span className="fortune-meta-label">普通签到</span>
+                <strong>
+                  {status
+                    ? formatRewardRange(
+                        status.daily_reward_min_balance,
+                        status.daily_reward_max_balance
+                      )
+                    : '--'}
+                </strong>
+                <small>区间随机</small>
               </div>
               <div className="fortune-meta-card">
                 <span className="fortune-meta-label">今日状态</span>
@@ -564,8 +571,15 @@ export function CheckinPage() {
               >
                 <div className="fortune-panel-left normal-surface">
                   <span className="fortune-panel-kicker">stable lane</span>
-                  <div className="fortune-panel-value">+{status?.daily_reward_balance.toFixed(2)}</div>
-                  <p className="fortune-panel-title">固定额度，直接入账</p>
+                  <div className="fortune-panel-value">
+                    {status
+                      ? formatRewardRange(
+                          status.daily_reward_min_balance,
+                          status.daily_reward_max_balance
+                        )
+                      : '--'}
+                  </div>
+                  <p className="fortune-panel-title">普通签到奖励区间</p>
                   <p className="fortune-panel-note">{getNormalStatusNote(status)}</p>
                   <button
                     className={`button fortune-action ${canSubmitNormal ? 'primary' : 'ghost'}`}
@@ -579,16 +593,16 @@ export function CheckinPage() {
                 <div className="fortune-panel-right">
                   <div className="fortune-bullet-grid">
                     <div className="fortune-bullet-card">
-                      <strong>稳定领取</strong>
-                      <span>适合今天只想稳稳拿到固定奖励。</span>
+                      <strong>随机区间</strong>
+                      <span>按后台配置范围发放。</span>
                     </div>
                     <div className="fortune-bullet-card">
-                      <strong>一键直达</strong>
-                      <span>不走抽签流程，直接进入普通签到发放链路。</span>
+                      <strong>直接发放</strong>
+                      <span>不走盲盒奖池。</span>
                     </div>
                     <div className="fortune-bullet-card mode-lock-card">
                       <strong>模式锁定</strong>
-                      <span>普通签到一旦成功，今天就不能再开启盲盒。</span>
+                      <span>完成后当日不能改模式。</span>
                     </div>
                   </div>
                 </div>
@@ -635,11 +649,7 @@ export function CheckinPage() {
                       >
                         管理员演示开盒
                       </button>
-                      <span>
-                        {(status?.blindbox_preview.item_count ?? 0) > 0
-                          ? '不写签到记录，不发奖励，只用于测试动效与结果卡'
-                          : '当前奖池为空时会自动使用内置演示签文，便于先测试动画与视觉表现'}
-                      </span>
+                      <span>仅演示，不写记录。</span>
                     </div>
                   )}
                 </div>
@@ -683,22 +693,22 @@ export function CheckinPage() {
 
         <motion.section variants={staggerItem} className="quick-access-grid">
           <div className="panel quick-access-card">
-            <strong>福利码改到独立页</strong>
-            <p>活动码、临时码和补发码统一走顶部导航里的“福利码”。</p>
+            <strong>福利码</strong>
+            <p>兑换入口已独立。</p>
             <button className="button" onClick={() => navigate('/redeem')}>
               前往福利码页
             </button>
           </div>
           <div className="panel quick-access-card">
-            <strong>历史记录单独沉淀</strong>
-            <p>签到与兑换流水都在“记录”页集中展示，不再和签到主流程混排。</p>
+            <strong>记录</strong>
+            <p>签到和兑换流水单独查看。</p>
             <button className="button" onClick={() => navigate('/history')}>
               查看记录
             </button>
           </div>
           <div className="panel quick-access-card">
-            <strong>低余额可直接重置</strong>
-            <p>是否可补到目标值由后台规则控制，入口已经放到“重置”页。</p>
+            <strong>额度重置</strong>
+            <p>是否可用由后台规则控制。</p>
             <button className="button" onClick={() => navigate('/reset')}>
               打开重置页
             </button>

@@ -113,6 +113,22 @@ function buildBlindboxPreview(items: BlindboxItem[]) {
   };
 }
 
+function pickRewardBalanceInRange(
+  minBalance: number,
+  maxBalance: number,
+  random: () => number
+): number {
+  if (maxBalance <= minBalance) {
+    return minBalance;
+  }
+
+  const rawValue = minBalance + random() * (maxBalance - minBalance);
+  return Math.min(
+    maxBalance,
+    Math.round(rawValue * 100) / 100
+  );
+}
+
 function buildModeConflictMessage(existingMode: CheckinMode): string {
   if (existingMode === 'normal') {
     return '今日已选择普通签到，不能再开启盲盒';
@@ -159,7 +175,8 @@ export class CheckinService {
       blindbox_enabled: settings.blindboxEnabled,
       timezone: settings.timezone,
       checkin_date: checkinDate,
-      daily_reward_balance: settings.dailyRewardBalance,
+      daily_reward_min_balance: settings.dailyRewardMinBalance,
+      daily_reward_max_balance: settings.dailyRewardMaxBalance,
       checked_in: today?.grantStatus === 'success',
       selected_mode: today?.checkinMode ?? null,
       grant_status: today?.grantStatus ?? null,
@@ -219,7 +236,11 @@ export class CheckinService {
       throw new ForbiddenError('签到功能已关闭');
     }
 
-    let reward = settings.dailyRewardBalance;
+    let reward = pickRewardBalanceInRange(
+      settings.dailyRewardMinBalance,
+      settings.dailyRewardMaxBalance,
+      this.random
+    );
     let blindboxItemId: number | null = null;
     let blindboxTitle = '';
 
@@ -327,7 +348,8 @@ export class CheckinService {
   async updateAdminSettings(input: {
     checkinEnabled?: boolean;
     blindboxEnabled?: boolean;
-    dailyRewardBalance?: number;
+    dailyRewardMinBalance?: number;
+    dailyRewardMaxBalance?: number;
     timezone?: string;
     resetEnabled?: boolean;
     resetThresholdBalance?: number;

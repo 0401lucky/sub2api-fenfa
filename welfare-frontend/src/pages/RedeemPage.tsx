@@ -67,9 +67,7 @@ export function RedeemPage() {
         <motion.section variants={staggerItem} className="panel utility-hero">
           <span className="eyebrow">Reward Exchange</span>
           <h1 className="hero-title utility-title">福利码兑换</h1>
-          <p className="lead utility-lead">
-            这里专门处理活动码、补发码和外部发放码，不再和签到主流程堆在一起。
-          </p>
+          <p className="lead utility-lead">活动码和补发码统一在这里处理。</p>
           <div className="utility-chip-row">
             <span className="chip">单次兑换即时入账</span>
             <span className="chip">失败原因直接回显</span>
@@ -113,18 +111,18 @@ export function RedeemPage() {
 
         <motion.section variants={staggerItem} className="utility-grid">
           <div className="panel utility-side-card">
-            <div className="utility-side-icon">
-              <Icon name="ticket" size={18} />
-            </div>
-            <strong>适合放活动码</strong>
-            <p>将活动入口和签到主流程拆开后，后续再加新型福利码也不会把签到页继续拉长。</p>
+          <div className="utility-side-icon">
+            <Icon name="ticket" size={18} />
+          </div>
+            <strong>独立兑换入口</strong>
+            <p>避免继续把签到页拉长。</p>
           </div>
           <div className="panel utility-side-card">
             <div className="utility-side-icon">
               <Icon name="chart" size={18} />
             </div>
-            <strong>历史单独沉淀</strong>
-            <p>兑换后的流水、失败原因和到账结果统一去“记录”页面看，不在当前页重复堆列表。</p>
+            <strong>记录单独查看</strong>
+            <p>历史流水统一放到“记录”页。</p>
           </div>
         </motion.section>
       </motion.div>

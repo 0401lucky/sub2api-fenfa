@@ -80,7 +80,8 @@ describe('AdminPage dashboard', () => {
       settings: {
         checkin_enabled: true,
         blindbox_enabled: true,
-        daily_reward_balance: 10,
+        daily_reward_min_balance: 10,
+        daily_reward_max_balance: 20,
         timezone: 'Asia/Shanghai',
         reset_enabled: true,
         reset_threshold_balance: 20,

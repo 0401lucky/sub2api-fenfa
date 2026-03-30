@@ -85,6 +85,8 @@ export class WelfareRepository {
       `SELECT checkin_enabled,
               blindbox_enabled,
               daily_reward_balance,
+              daily_reward_min_balance,
+              daily_reward_max_balance,
               timezone,
               reset_enabled,
               reset_threshold_balance,
@@ -101,6 +103,8 @@ export class WelfareRepository {
            checkin_enabled,
            blindbox_enabled,
            daily_reward_balance,
+           daily_reward_min_balance,
+           daily_reward_max_balance,
            timezone,
            reset_enabled,
            reset_threshold_balance,
@@ -108,7 +112,7 @@ export class WelfareRepository {
            reset_cooldown_days,
            reset_notice
          )
-         VALUES (1, $1, $2, $3, $4, FALSE, 20, 200, 7, $5)
+         VALUES (1, $1, $2, $3, $3, $3, $4, FALSE, 20, 200, 7, $5)
          ON CONFLICT (id) DO NOTHING`,
         [
           config.DEFAULT_CHECKIN_ENABLED,
@@ -125,7 +129,12 @@ export class WelfareRepository {
     return {
       checkinEnabled: Boolean(row.checkin_enabled),
       blindboxEnabled: Boolean(row.blindbox_enabled),
-      dailyRewardBalance: toNumber(row.daily_reward_balance),
+      dailyRewardMinBalance: toNumber(
+        row.daily_reward_min_balance ?? row.daily_reward_balance
+      ),
+      dailyRewardMaxBalance: toNumber(
+        row.daily_reward_max_balance ?? row.daily_reward_balance
+      ),
       timezone: String(row.timezone),
       resetEnabled: Boolean(row.reset_enabled),
       resetThresholdBalance: toNumber(row.reset_threshold_balance),
@@ -144,7 +153,10 @@ export class WelfareRepository {
     const next = {
       checkinEnabled: input.checkinEnabled ?? current.checkinEnabled,
       blindboxEnabled: input.blindboxEnabled ?? current.blindboxEnabled,
-      dailyRewardBalance: input.dailyRewardBalance ?? current.dailyRewardBalance,
+      dailyRewardMinBalance:
+        input.dailyRewardMinBalance ?? current.dailyRewardMinBalance,
+      dailyRewardMaxBalance:
+        input.dailyRewardMaxBalance ?? current.dailyRewardMaxBalance,
       timezone: input.timezone ?? current.timezone,
       resetEnabled: input.resetEnabled ?? current.resetEnabled,
       resetThresholdBalance:
@@ -158,18 +170,22 @@ export class WelfareRepository {
        SET checkin_enabled = $1,
            blindbox_enabled = $2,
            daily_reward_balance = $3,
-           timezone = $4,
-           reset_enabled = $5,
-           reset_threshold_balance = $6,
-           reset_target_balance = $7,
-           reset_cooldown_days = $8,
-           reset_notice = $9,
+           daily_reward_min_balance = $4,
+           daily_reward_max_balance = $5,
+           timezone = $6,
+           reset_enabled = $7,
+           reset_threshold_balance = $8,
+           reset_target_balance = $9,
+           reset_cooldown_days = $10,
+           reset_notice = $11,
            updated_at = NOW()
        WHERE id = 1`,
       [
         next.checkinEnabled,
         next.blindboxEnabled,
-        next.dailyRewardBalance,
+        next.dailyRewardMaxBalance,
+        next.dailyRewardMinBalance,
+        next.dailyRewardMaxBalance,
         next.timezone,
         next.resetEnabled,
         next.resetThresholdBalance,

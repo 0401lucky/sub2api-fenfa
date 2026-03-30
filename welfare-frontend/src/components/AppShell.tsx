@@ -37,7 +37,7 @@ export function AppShell() {
             <span className="app-shell-brand-mark">WF</span>
             <span className="app-shell-brand-copy">
               <strong>Welfare Station</strong>
-              <small>一个入口，承载签到、福利码、记录与重置</small>
+              <small>签到 · 福利码 · 记录 · 重置</small>
             </span>
           </NavLink>
 

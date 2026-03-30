@@ -20,6 +20,7 @@ import {
   welfareRepository
 } from '../services/checkin-service.js';
 import { resetService } from '../services/reset-service.js';
+import { userCleanupService } from '../services/user-cleanup-service.js';
 import {
   redeemService,
   ConflictError as RedeemConflictError,
@@ -256,6 +257,16 @@ const resetRecordsQuerySchema = z.object({
   subject: z.string().max(64).optional()
 });
 
+const userCleanupCandidatesQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  page_size: z.coerce.number().int().positive().max(200).optional(),
+  search: z.string().max(120).optional()
+});
+
+const userCleanupDeleteSchema = z.object({
+  user_ids: z.array(z.number().int().positive()).min(1).max(200)
+});
+
 const blindboxItemCreateSchema = z.object({
   title: z.string().min(1).max(80),
   reward_balance: z.number().positive(),
@@ -480,6 +491,44 @@ adminRouter.get('/sub2api-users/search', asyncHandler(async (req, res) => {
     username: item.username || item.email,
     linuxdo_subject: extractLinuxDoSubjectFromEmail(item.email)
   })));
+}));
+
+adminRouter.get('/user-cleanup/candidates', asyncHandler(async (req, res) => {
+  const parsed = userCleanupCandidatesQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    fail(res, 400, 'BAD_REQUEST', '查询参数非法');
+    return;
+  }
+
+  const page = parsed.data.page ?? 1;
+  const pageSize = parsed.data.page_size ?? 20;
+  const result = await userCleanupService.listCleanupCandidates({
+    page,
+    pageSize,
+    search: parsed.data.search?.trim() || undefined,
+    currentUserId: req.sessionUser!.sub2apiUserId
+  });
+  ok(res, {
+    items: result.items,
+    total: result.total,
+    page,
+    page_size: pageSize,
+    pages: Math.max(1, Math.ceil(result.total / pageSize))
+  });
+}));
+
+adminRouter.post('/user-cleanup/delete', asyncHandler(async (req, res) => {
+  const parsed = userCleanupDeleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    fail(res, 400, 'BAD_REQUEST', 'user_ids 参数非法');
+    return;
+  }
+
+  const result = await userCleanupService.deleteCleanupCandidates(
+    req.sessionUser!,
+    parsed.data.user_ids
+  );
+  ok(res, result);
 }));
 
 adminRouter.post('/whitelist', asyncHandler(async (req, res) => {

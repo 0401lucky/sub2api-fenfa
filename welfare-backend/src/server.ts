@@ -68,6 +68,31 @@ async function hydrateBootstrapAdminWhitelist(): Promise<void> {
     }
   }
 
+  if (config.BOOTSTRAP_ADMIN_EMAILS.length > 0) {
+    for (const email of config.BOOTSTRAP_ADMIN_EMAILS) {
+      try {
+        const user = await sub2apiClient.findUserByEmail(email);
+        if (!user) {
+          console.warn(`[welfare-backend] 启动管理员邮箱未命中 sub2api 用户: ${email}`);
+          continue;
+        }
+
+        await welfareRepository.addAdminWhitelist({
+          sub2apiUserId: user.id,
+          email: user.email,
+          username: user.username || user.email,
+          linuxdoSubject: extractLinuxDoSubjectFromEmail(user.email),
+          notes: 'bootstrap-email'
+        });
+      } catch (error) {
+        console.warn(
+          `[welfare-backend] 启动管理员邮箱预热失败: ${email}`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+  }
+
   await backfillLegacyAdminWhitelist();
 }
 

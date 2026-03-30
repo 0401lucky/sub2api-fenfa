@@ -144,4 +144,31 @@ describe('sub2api client', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('删除用户会调用管理员删除接口', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: 0,
+          message: 'ok',
+          data: {
+            message: 'deleted'
+          }
+        }),
+        {
+          status: 200
+        }
+      )
+    );
+
+    const result = await client.deleteAdminUser(42);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/api/v1/admin/users/42',
+      expect.objectContaining({
+        method: 'DELETE'
+      })
+    );
+    expect(result).toEqual({ message: 'deleted' });
+  });
 });

@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { buildLinuxDoStartUrl } from '../lib/api';
+import { buildLinuxDoStartUrl, buildSub2apiAdminLoginUrl } from '../lib/api';
 import { Icon } from '../components/Icon';
 import { motion } from 'framer-motion';
 import { pageVariants } from '../lib/animations';
@@ -12,6 +12,7 @@ export function LoginPage() {
     typeof (location.state as { from?: unknown } | null)?.from === 'string'
       ? (location.state as { from: string }).from
       : '/checkin';
+  const adminLoginUrl = buildSub2apiAdminLoginUrl('/admin');
 
   if (status === 'authenticated') {
     return <Navigate to={redirectPath} replace />;
@@ -65,6 +66,11 @@ export function LoginPage() {
         <a className="button primary wide" href={buildLinuxDoStartUrl(redirectPath)}>
           使用 LinuxDo 登录 →
         </a>
+        {adminLoginUrl && (
+          <a className="button wide" href={adminLoginUrl}>
+            使用 sub2api 管理员登录
+          </a>
+        )}
       </div>
     </motion.div>
   );

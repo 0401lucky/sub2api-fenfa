@@ -1,5 +1,7 @@
 import type {
   AdminBlindboxItem,
+  AdminCleanupCandidateList,
+  AdminCleanupDeleteResult,
   AdminCheckinItem,
   AdminCheckinList,
   AdminCheckinQuery,
@@ -224,6 +226,27 @@ export const api = {
     request<AdminUserSearchItem[]>(
       `/api/admin/sub2api-users/search?q=${encodeURIComponent(query)}`
     ),
+  listAdminCleanupCandidates: (params: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+  } = {}) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.page_size) query.set('page_size', String(params.page_size));
+    if (params.search) query.set('search', params.search);
+    const suffix = query.toString();
+    return request<AdminCleanupCandidateList>(
+      `/api/admin/user-cleanup/candidates${suffix ? `?${suffix}` : ''}`
+    );
+  },
+  deleteAdminCleanupCandidates: (userIds: number[]) =>
+    request<AdminCleanupDeleteResult>('/api/admin/user-cleanup/delete', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_ids: userIds
+      })
+    }),
   addWhitelist: (payload: {
     sub2api_user_id: number;
     email: string;
@@ -330,6 +353,17 @@ export const api = {
 
 export function buildLinuxDoStartUrl(redirectPath: string): string {
   const url = new URL(resolveApiPath('/api/auth/linuxdo/start'), window.location.origin);
+  url.searchParams.set('redirect', redirectPath);
+  return url.toString();
+}
+
+export function buildSub2apiAdminLoginUrl(redirectPath = '/admin'): string | null {
+  const baseUrl = import.meta.env.VITE_SUB2API_ADMIN_LOGIN_URL?.trim();
+  if (!baseUrl) {
+    return null;
+  }
+
+  const url = new URL(baseUrl, window.location.origin);
   url.searchParams.set('redirect', redirectPath);
   return url.toString();
 }

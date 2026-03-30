@@ -71,4 +71,31 @@ describe('LoginPage', () => {
 
     expect(await screen.findByText('管理员目标页')).toBeInTheDocument();
   });
+
+  it('配置了 sub2api 管理员入口时会显示次级登录按钮', () => {
+    vi.stubEnv('VITE_SUB2API_ADMIN_LOGIN_URL', 'https://sub2api.example.com/admin-login');
+    mockUseAuth.mockReturnValue({
+      status: 'unauthenticated',
+      user: null,
+      error: null,
+      refresh: vi.fn(),
+      logout: vi.fn()
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/login', state: { from: '/admin' } }]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: /使用 sub2api 管理员登录/i })).toHaveAttribute(
+      'href',
+      'https://sub2api.example.com/admin-login?redirect=%2Fadmin'
+    );
+  });
 });

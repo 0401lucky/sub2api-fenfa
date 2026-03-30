@@ -289,6 +289,43 @@ export interface AdminUserSearchItem {
   linuxdo_subject: string | null;
 }
 
+export interface AdminCleanupCandidate {
+  sub2api_user_id: number;
+  email: string;
+  username: string;
+  balance: number | null;
+  linuxdo_subject: string | null;
+  welfare_activity: {
+    checkin_count: number;
+    redeem_count: number;
+    reset_count: number;
+  };
+  cleanup_reason: string;
+}
+
+export interface AdminCleanupCandidateList {
+  items: AdminCleanupCandidate[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
+export interface AdminCleanupDeleteItem {
+  sub2api_user_id: number;
+  email: string;
+  username: string;
+  deleted: boolean;
+  detail: string;
+}
+
+export interface AdminCleanupDeleteResult {
+  items: AdminCleanupDeleteItem[];
+  total: number;
+  success_count: number;
+  fail_count: number;
+}
+
 export interface WhitelistItem {
   id: number;
   sub2apiUserId: number | null;

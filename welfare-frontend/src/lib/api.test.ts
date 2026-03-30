@@ -66,4 +66,14 @@ describe('api request', () => {
       `${window.location.origin}/welfare-backend/api/auth/linuxdo/start?redirect=%2Fadmin`
     );
   });
+
+  it('构建 sub2api 管理员登录地址时会附带后台跳转目标', async () => {
+    vi.stubEnv('VITE_SUB2API_ADMIN_LOGIN_URL', 'https://sub2api.example.com/admin-login');
+
+    const { buildSub2apiAdminLoginUrl } = await import('./api');
+
+    expect(buildSub2apiAdminLoginUrl('/admin')).toBe(
+      'https://sub2api.example.com/admin-login?redirect=%2Fadmin'
+    );
+  });
 });

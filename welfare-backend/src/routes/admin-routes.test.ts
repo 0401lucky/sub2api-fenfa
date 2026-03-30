@@ -46,6 +46,11 @@ const mockResetService = vi.hoisted(() => ({
   getAdminResetRecords: vi.fn()
 }));
 
+const mockUserCleanupService = vi.hoisted(() => ({
+  listCleanupCandidates: vi.fn(),
+  deleteCleanupCandidates: vi.fn()
+}));
+
 vi.mock('../middleware/auth-middleware.js', () => ({
   requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     req.sessionUser = {
@@ -87,6 +92,10 @@ vi.mock('../services/reset-service.js', () => ({
   resetService: mockResetService
 }));
 
+vi.mock('../services/user-cleanup-service.js', () => ({
+  userCleanupService: mockUserCleanupService
+}));
+
 async function createTestApp() {
   const { adminRouter } = await import('./admin-routes.js');
   const app = express();
@@ -109,6 +118,7 @@ describe('adminRouter', () => {
     Object.values(mockWelfareRepository).forEach((fn) => fn.mockReset());
     Object.values(mockRedeemService).forEach((fn) => fn.mockReset());
     Object.values(mockResetService).forEach((fn) => fn.mockReset());
+    Object.values(mockUserCleanupService).forEach((fn) => fn.mockReset());
   });
 
   it('PUT /settings 在 timezone 非法时返回 400', async () => {
@@ -201,6 +211,58 @@ describe('adminRouter', () => {
         grantStatus: 'success'
       })
     );
+  });
+
+  it('GET /user-cleanup/candidates 返回候选用户分页结果', async () => {
+    mockUserCleanupService.listCleanupCandidates.mockResolvedValue({
+      items: [
+        {
+          sub2api_user_id: 10,
+          email: 'candidate@example.com',
+          username: 'candidate',
+          balance: 0,
+          linuxdo_subject: null,
+          welfare_activity: {
+            checkin_count: 0,
+            redeem_count: 0,
+            reset_count: 0
+          },
+          cleanup_reason: '非 LinuxDo / 非管理员 / 无福利站流水'
+        }
+      ],
+      total: 1
+    });
+
+    const app = await createTestApp();
+    const response = await request(app).get('/api/admin/user-cleanup/candidates?page=1&page_size=20');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.items[0].sub2api_user_id).toBe(10);
+  });
+
+  it('POST /user-cleanup/delete 返回批量删除结果', async () => {
+    mockUserCleanupService.deleteCleanupCandidates.mockResolvedValue({
+      items: [
+        {
+          sub2api_user_id: 10,
+          email: 'candidate@example.com',
+          username: 'candidate',
+          deleted: true,
+          detail: '用户已删除'
+        }
+      ],
+      total: 1,
+      success_count: 1,
+      fail_count: 0
+    });
+
+    const app = await createTestApp();
+    const response = await request(app)
+      .post('/api/admin/user-cleanup/delete')
+      .send({ user_ids: [10] });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.success_count).toBe(1);
   });
 
   it('DELETE /whitelist/:id 会阻止删除当前登录管理员', async () => {

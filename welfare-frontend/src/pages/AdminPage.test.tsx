@@ -60,6 +60,10 @@ vi.mock('../components/AdminWhitelistPanel', () => ({
   AdminWhitelistPanel: () => <div>白名单模块</div>
 }));
 
+vi.mock('../components/AdminUserCleanupPanel', () => ({
+  AdminUserCleanupPanel: () => <div>用户清理模块</div>
+}));
+
 describe('AdminPage dashboard', () => {
   beforeEach(() => {
     mockUseAuth.mockReset();
@@ -135,5 +139,16 @@ describe('AdminPage dashboard', () => {
 
     fireEvent.click(await screen.findByText('前往兑换码'));
     expect(await screen.findByText('兑换码模块')).toBeInTheDocument();
+  });
+
+  it('可以切换到用户清理分区', async () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AdminPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /用户清理/i }));
+    expect(await screen.findByText('用户清理模块')).toBeInTheDocument();
   });
 });

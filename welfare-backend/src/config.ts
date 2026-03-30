@@ -114,7 +114,8 @@ const configSchema = z.object({
     .default('Asia/Shanghai')
     .refine(isValidTimezone, 'DEFAULT_TIMEZONE 必须是合法时区'),
   BOOTSTRAP_ADMIN_USER_IDS: z.string().default(''),
-  BOOTSTRAP_ADMIN_SUBJECTS: z.string().default('')
+  BOOTSTRAP_ADMIN_SUBJECTS: z.string().default(''),
+  BOOTSTRAP_ADMIN_EMAILS: z.string().default('')
 });
 
 function normalizeOrigin(value: string, fieldName: string): string {
@@ -168,11 +169,17 @@ const bootstrapAdminUserIds = raw.BOOTSTRAP_ADMIN_USER_IDS.split(',')
 const bootstrapAdminSubjects = raw.BOOTSTRAP_ADMIN_SUBJECTS.split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+const bootstrapAdminEmails = raw.BOOTSTRAP_ADMIN_EMAILS.split(',')
+  .map((item) => item.trim().toLowerCase())
+  .filter(Boolean);
 const invalidBootstrapUserId = bootstrapAdminUserIds.find(
   (item) => !Number.isInteger(item) || item <= 0
 );
 const invalidBootstrapSubject = bootstrapAdminSubjects.find(
   (item) => !isSafeLinuxDoSubject(item)
+);
+const invalidBootstrapEmail = bootstrapAdminEmails.find(
+  (item) => !z.string().email().safeParse(item).success
 );
 
 if (invalidBootstrapUserId) {
@@ -184,6 +191,12 @@ if (invalidBootstrapUserId) {
 if (invalidBootstrapSubject) {
   throw new Error(
     `环境变量校验失败：BOOTSTRAP_ADMIN_SUBJECTS 包含非法 subject: ${invalidBootstrapSubject}`
+  );
+}
+
+if (invalidBootstrapEmail) {
+  throw new Error(
+    `环境变量校验失败：BOOTSTRAP_ADMIN_EMAILS 包含非法邮箱: ${invalidBootstrapEmail}`
   );
 }
 
@@ -199,6 +212,7 @@ export const config = {
   WELFARE_RATE_LIMIT_ADMIN_MUTATION_WINDOW_MS: adminMutationRateLimitWindowMs,
   BOOTSTRAP_ADMIN_USER_IDS: bootstrapAdminUserIds,
   BOOTSTRAP_ADMIN_SUBJECTS: bootstrapAdminSubjects,
+  BOOTSTRAP_ADMIN_EMAILS: bootstrapAdminEmails,
   SUB2API_BASE_URL: raw.SUB2API_BASE_URL.replace(/\/+$/, '')
 };
 

@@ -133,9 +133,11 @@ export class Sub2apiClient {
     return this.withRetries(`查询用户 ${search}`, async () => {
       const query = new URLSearchParams({
         page: String(page),
-        page_size: String(pageSize),
-        search
+        page_size: String(pageSize)
       });
+      if (search.trim() !== '') {
+        query.set('search', search);
+      }
 
       const response = await fetchWithTimeout(
         `${config.SUB2API_BASE_URL}/api/v1/admin/users?${query.toString()}`,
@@ -232,6 +234,36 @@ export class Sub2apiClient {
     return items.map((item) => this.parseAdminUserLite(item));
   }
 
+  async listAdminUsers(
+    page = 1,
+    pageSize = USER_PAGE_SIZE,
+    search = ''
+  ): Promise<{ items: AdminUserLite[]; total: number }> {
+    const envelope = await this.fetchUsersPage(search.trim(), page, pageSize);
+    return {
+      items: (envelope.data?.items ?? []).map((item) => this.parseAdminUserLite(item)),
+      total: envelope.data?.total ?? 0
+    };
+  }
+
+  async listAllAdminUsers(search = ''): Promise<AdminUserLite[]> {
+    let page = 1;
+    let totalPages = 1;
+    const items: AdminUserLite[] = [];
+
+    while (page <= totalPages) {
+      const result = await this.listAdminUsers(page, USER_PAGE_SIZE, search);
+      items.push(...result.items);
+      totalPages = Math.max(1, Math.ceil((result.total || result.items.length) / USER_PAGE_SIZE));
+      if (result.items.length === 0) {
+        break;
+      }
+      page += 1;
+    }
+
+    return items;
+  }
+
   async getCurrentUser(accessToken: string): Promise<CurrentUserProfile> {
     return this.withRetries('获取当前 sub2api 登录用户', async () => {
       const response = await fetchWithTimeout(
@@ -317,6 +349,38 @@ export class Sub2apiClient {
       return {
         newBalance: envelope.data?.balance,
         requestId
+      };
+    });
+  }
+
+  async deleteAdminUser(userId: number): Promise<{ message: string }> {
+    return this.withRetries(`删除用户 ${userId}`, async () => {
+      const response = await fetchWithTimeout(
+        `${config.SUB2API_BASE_URL}/api/v1/admin/users/${userId}`,
+        {
+          method: 'DELETE',
+          headers: this.baseHeaders
+        },
+        config.SUB2API_TIMEOUT_MS
+      );
+      const body = await response.text();
+      if (!response.ok) {
+        throw new HttpError(response.status, body, `删除 sub2api 用户失败: ${response.status}`);
+      }
+
+      const envelope = this.parseEnvelope<{ message?: string }>(
+        body,
+        '删除 sub2api 用户失败'
+      );
+      if (envelope.code !== 0) {
+        throw new Sub2apiResponseError(
+          `删除 sub2api 用户失败：${envelope.message || 'unknown error'}`,
+          body
+        );
+      }
+
+      return {
+        message: envelope.data?.message || envelope.message || '用户已删除'
       };
     });
   }

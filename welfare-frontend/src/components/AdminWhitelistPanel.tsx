@@ -117,13 +117,13 @@ export function AdminWhitelistPanel({
               <span>权限摘要</span>
             </span>
           </h2>
-          <div className="admin-stats-summary">
-            <span className="chip">管理员数量：{whitelist.length}</span>
-            <span className="chip">当前登录：{userName}</span>
-          </div>
-          <p className="muted admin-note">
-            白名单按 sub2api 用户 ID 生效。用户改邮箱后不会丢失管理员权限。
-          </p>
+        <div className="admin-stats-summary">
+          <span className="chip">管理员数量：{whitelist.length}</span>
+          <span className="chip">当前登录：{userName}</span>
+        </div>
+        <p className="muted admin-note">
+          白名单按 sub2api 用户 ID 生效。部署管理员建议通过 `BOOTSTRAP_ADMIN_EMAILS` 预热。
+        </p>
         </div>
       </div>
 

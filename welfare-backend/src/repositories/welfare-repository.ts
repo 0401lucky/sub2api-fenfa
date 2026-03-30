@@ -76,6 +76,25 @@ export interface CreateResetRecordInput {
   idempotencyKey: string;
 }
 
+export interface UserActivitySummary {
+  sub2apiUserId: number;
+  checkinCount: number;
+  redeemCount: number;
+  resetCount: number;
+}
+
+export interface CreateUserCleanupLogInput {
+  operatorSub2apiUserId: number;
+  operatorEmail: string;
+  operatorUsername: string;
+  targetSub2apiUserId: number;
+  targetEmail: string;
+  targetUsername: string;
+  targetBalance: number | null;
+  resultStatus: 'success' | 'failed';
+  detail: string;
+}
+
 export class WelfareRepository {
   constructor(private readonly db: Pool) {}
 
@@ -825,6 +844,106 @@ export class WelfareRepository {
       items: listResult.rows.map((row) => this.mapResetRecord(row)),
       total: Number(totalResult.rows[0]?.total ?? 0)
     };
+  }
+
+  async getUserActivitySummaryMap(
+    userIds: number[],
+    client?: PoolClient
+  ): Promise<Map<number, UserActivitySummary>> {
+    const summaryMap = new Map<number, UserActivitySummary>();
+    userIds.forEach((userId) => {
+      summaryMap.set(userId, {
+        sub2apiUserId: userId,
+        checkinCount: 0,
+        redeemCount: 0,
+        resetCount: 0
+      });
+    });
+
+    if (userIds.length === 0) {
+      return summaryMap;
+    }
+
+    const executor = client ?? this.db;
+    const [checkinRows, redeemRows, resetRows] = await Promise.all([
+      executor.query(
+        `SELECT sub2api_user_id, COUNT(*)::int AS total
+         FROM welfare_checkins
+         WHERE sub2api_user_id = ANY($1::bigint[])
+         GROUP BY sub2api_user_id`,
+        [userIds]
+      ),
+      executor.query(
+        `SELECT sub2api_user_id, COUNT(*)::int AS total
+         FROM welfare_redeem_claims
+         WHERE sub2api_user_id = ANY($1::bigint[])
+         GROUP BY sub2api_user_id`,
+        [userIds]
+      ),
+      executor.query(
+        `SELECT sub2api_user_id, COUNT(*)::int AS total
+         FROM welfare_reset_records
+         WHERE sub2api_user_id = ANY($1::bigint[])
+         GROUP BY sub2api_user_id`,
+        [userIds]
+      )
+    ]);
+
+    checkinRows.rows.forEach((row) => {
+      const userId = Number(row.sub2api_user_id);
+      const current = summaryMap.get(userId);
+      if (current) {
+        current.checkinCount = Number(row.total);
+      }
+    });
+    redeemRows.rows.forEach((row) => {
+      const userId = Number(row.sub2api_user_id);
+      const current = summaryMap.get(userId);
+      if (current) {
+        current.redeemCount = Number(row.total);
+      }
+    });
+    resetRows.rows.forEach((row) => {
+      const userId = Number(row.sub2api_user_id);
+      const current = summaryMap.get(userId);
+      if (current) {
+        current.resetCount = Number(row.total);
+      }
+    });
+
+    return summaryMap;
+  }
+
+  async createUserCleanupLog(
+    input: CreateUserCleanupLogInput,
+    client?: PoolClient
+  ): Promise<void> {
+    const executor = client ?? this.db;
+    await executor.query(
+      `INSERT INTO welfare_user_cleanup_logs (
+         operator_sub2api_user_id,
+         operator_email,
+         operator_username,
+         target_sub2api_user_id,
+         target_email,
+         target_username,
+         target_balance,
+         result_status,
+         detail
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        input.operatorSub2apiUserId,
+        input.operatorEmail,
+        input.operatorUsername,
+        input.targetSub2apiUserId,
+        input.targetEmail,
+        input.targetUsername,
+        input.targetBalance,
+        input.resultStatus,
+        input.detail
+      ]
+    );
   }
 
   async getDailyStats(startDate: string): Promise<

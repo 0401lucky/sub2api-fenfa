@@ -25,7 +25,8 @@ function applyBaseEnv() {
     DEFAULT_CHECKIN_ENABLED: 'true',
     DEFAULT_DAILY_REWARD: '10',
     DEFAULT_TIMEZONE: 'Asia/Shanghai',
-    BOOTSTRAP_ADMIN_SUBJECTS: ''
+    BOOTSTRAP_ADMIN_SUBJECTS: '',
+    BOOTSTRAP_ADMIN_EMAILS: ''
   };
 }
 
@@ -63,6 +64,14 @@ describe('config', () => {
 
     await expect(import('./config.js')).rejects.toThrow(
       'BOOTSTRAP_ADMIN_SUBJECTS 包含非法 subject'
+    );
+  });
+
+  it('rejects invalid bootstrap admin emails', async () => {
+    process.env.BOOTSTRAP_ADMIN_EMAILS = 'good@example.com,not-an-email';
+
+    await expect(import('./config.js')).rejects.toThrow(
+      'BOOTSTRAP_ADMIN_EMAILS 包含非法邮箱'
     );
   });
 });

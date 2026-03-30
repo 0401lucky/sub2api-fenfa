@@ -7,6 +7,7 @@ import { AdminDashboardOverview } from '../components/AdminDashboardOverview';
 import { AdminResetRecordsPanel } from '../components/AdminResetRecordsPanel';
 import { AdminRedeemCodesPanel } from '../components/AdminRedeemCodesPanel';
 import { AdminRedeemClaimsPanel } from '../components/AdminRedeemClaimsPanel';
+import { AdminUserCleanupPanel } from '../components/AdminUserCleanupPanel';
 import { AdminWhitelistPanel } from '../components/AdminWhitelistPanel';
 import { useAuth } from '../lib/auth';
 import { api, isUnauthorizedError } from '../lib/api';
@@ -24,7 +25,7 @@ import type {
 import { motion } from 'framer-motion';
 import { pageVariants } from '../lib/animations';
 
-type AdminSection = 'overview' | 'checkins' | 'resetRecords' | 'redeemCodes' | 'redeemClaims' | 'whitelist';
+type AdminSection = 'overview' | 'checkins' | 'resetRecords' | 'redeemCodes' | 'redeemClaims' | 'userCleanup' | 'whitelist';
 
 const defaultCheckinFilters: AdminCheckinQuery = {
   page: 1,
@@ -79,6 +80,13 @@ const sections: Array<{
     title: '兑换记录台',
     description: '处理兑换失败和补发异常。',
     icon: 'chart'
+  },
+  {
+    id: 'userCleanup',
+    label: '用户清理',
+    title: '候选清理用户',
+    description: '筛出可清理候选并执行删除。',
+    icon: 'users'
   },
   {
     id: 'whitelist',
@@ -491,13 +499,15 @@ export function AdminPage() {
                   {item.id === 'checkins'
                     ? stats?.total_checkins ?? 0
                     : item.id === 'resetRecords'
-                      ? settings?.reset_enabled
-                        ? 'ON'
-                        : 'OFF'
+                        ? settings?.reset_enabled
+                          ? 'ON'
+                          : 'OFF'
                     : item.id === 'redeemCodes'
                       ? overviewRedeemCodes.length
                       : item.id === 'redeemClaims'
                         ? urgentTotal
+                        : item.id === 'userCleanup'
+                          ? '🧹'
                         : item.id === 'whitelist'
                           ? whitelist.length
                           : '•'}
@@ -669,6 +679,14 @@ export function AdminPage() {
               onSearch={searchAdminUsers}
               onAdd={addWhitelist}
               onRemove={removeWhitelist}
+            />
+          )}
+
+          {activeSection === 'userCleanup' && (
+            <AdminUserCleanupPanel
+              onUnauthorized={redirectToLogin}
+              onError={setError}
+              onSuccess={setMessage}
             />
           )}
         </main>

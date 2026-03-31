@@ -91,6 +91,14 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/auth/sub2api-bridge" element={<Sub2apiBridgePage />} />
         <Route
+          path="/admin"
+          element={
+            <RequireAuth requireAdmin>
+              <AdminPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           element={
             <RequireAuth>
               <AppShell />
@@ -101,14 +109,6 @@ export default function App() {
           <Route path="/redeem" element={<RedeemPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/reset" element={<ResetPage />} />
-          <Route
-            path="/admin"
-            element={
-              <RequireAuth requireAdmin>
-                <AdminPage />
-              </RequireAuth>
-            }
-          />
           <Route path="*" element={<Navigate to="/checkin" replace />} />
         </Route>
       </Routes>

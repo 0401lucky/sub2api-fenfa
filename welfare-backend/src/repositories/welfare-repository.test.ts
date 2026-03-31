@@ -73,4 +73,57 @@ describe('WelfareRepository', () => {
       'welfare-checkin:normal:42:2026-03-30'
     ]);
   });
+
+  it('addAdminWhitelist 在 linuxdo_subject 为空时会走事务查询再插入，不依赖 ON CONFLICT 推断', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [
+          {
+            id: 3,
+            sub2api_user_id: 99,
+            sub2api_email: 'lucky@bluepha.org',
+            sub2api_username: 'lucky',
+            linuxdo_subject: null,
+            notes: 'manual',
+            created_at: '2026-03-31T00:00:00.000Z'
+          }
+        ]
+      })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    const connect = vi.fn().mockResolvedValue({
+      query,
+      release
+    });
+
+    const repository = new WelfareRepository({ connect } as never);
+
+    const result = await repository.addAdminWhitelist({
+      sub2apiUserId: 99,
+      email: 'lucky@bluepha.org',
+      username: 'lucky',
+      linuxdoSubject: null,
+      notes: 'manual'
+    });
+
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(query.mock.calls[2]?.[0]).toContain('INSERT INTO welfare_admin_whitelist');
+    expect(query.mock.calls[2]?.[0]).not.toContain('ON CONFLICT (sub2api_user_id)');
+    expect(query).toHaveBeenLastCalledWith('COMMIT');
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      id: 3,
+      sub2apiUserId: 99,
+      email: 'lucky@bluepha.org',
+      username: 'lucky',
+      linuxdoSubject: null,
+      notes: 'manual',
+      createdAt: '2026-03-31T00:00:00.000Z'
+    });
+  });
 });

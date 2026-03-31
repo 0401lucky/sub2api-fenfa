@@ -76,11 +76,12 @@ describe('ResetPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('额度重置')).toBeInTheDocument();
-    expect(screen.getByText('当前余额 12.00')).toBeInTheDocument();
-    expect(screen.getByText('188.00')).toBeInTheDocument();
+    expect(await screen.findByText('额度探测与重置 (Quota Reset)')).toBeInTheDocument();
+    expect(screen.getByText('检测余额')).toBeInTheDocument();
+    expect(screen.getByText('12.00')).toBeInTheDocument();
+    expect(screen.getByText(/\+188\.00/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '立即补到目标值' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交补差指令' }));
 
     await waitFor(() => {
       expect(mockApi.applyReset).toHaveBeenCalledTimes(1);

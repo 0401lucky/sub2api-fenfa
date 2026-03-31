@@ -99,12 +99,10 @@ describe('CheckinPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/DAILY CHECK-IN/i)).toBeInTheDocument();
-    expect(screen.getByText('惊喜签到')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '前往福利码页' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '查看记录' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '打开重置页' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: /惊喜签到风险型盲盒/i }));
+    expect(await screen.findByText(/签到工作台/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '普通签到' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '惊喜盲盒' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '惊喜盲盒' }));
     expect(await screen.findByRole('button', { name: '管理员演示开盒' })).toBeInTheDocument();
 
     await waitFor(() => {
@@ -131,7 +129,7 @@ describe('CheckinPage', () => {
       </MemoryRouter>
     );
 
-    const button = await screen.findByRole('button', { name: '普通签到' });
+    const button = await screen.findByRole('button', { name: /执\s*行/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -156,8 +154,8 @@ describe('CheckinPage', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(await screen.findByRole('tab', { name: /惊喜签到风险型盲盒/i }));
-    const button = await screen.findByRole('button', { name: '开启今日盲盒' });
+    fireEvent.click(await screen.findByRole('button', { name: '惊喜盲盒' }));
+    const button = await screen.findByRole('button', { name: /抽\s*取/i });
     fireEvent.click(button);
 
     await waitFor(() => {

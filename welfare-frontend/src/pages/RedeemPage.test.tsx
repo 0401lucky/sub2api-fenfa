@@ -47,11 +47,13 @@ describe('RedeemPage', () => {
     fireEvent.change(screen.getByPlaceholderText('例如：WELCOME100'), {
       target: { value: 'WELCOME100' }
     });
-    fireEvent.click(screen.getByRole('button', { name: '立即兑换' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交兑换' }));
 
     await waitFor(() => {
       expect(mockApi.redeemCode).toHaveBeenCalledWith({ code: 'WELCOME100' });
     });
-    expect(await screen.findByText(/兑换成功/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('例如：WELCOME100')).toHaveValue('');
+    });
   });
 });

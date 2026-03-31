@@ -343,65 +343,114 @@ export class WelfareRepository {
        FROM welfare_admin_whitelist
        ORDER BY id ASC`
     );
-    return result.rows.map((row) => ({
-      id: Number(row.id),
-      sub2apiUserId:
-        row.sub2api_user_id == null ? null : Number(row.sub2api_user_id),
-      email: String(row.sub2api_email ?? ''),
-      username: String(row.sub2api_username ?? ''),
-      linuxdoSubject:
-        typeof row.linuxdo_subject === 'string' && row.linuxdo_subject.trim() !== ''
-          ? String(row.linuxdo_subject)
-          : null,
-      notes: String(row.notes ?? ''),
-      createdAt: String(row.created_at)
-    }));
+    return result.rows.map((row) => this.mapAdminWhitelistItem(row));
   }
 
   async addAdminWhitelist(input: CreateAdminWhitelistInput): Promise<AdminWhitelistItem> {
-    const result = await this.db.query(
-      `INSERT INTO welfare_admin_whitelist (
-         sub2api_user_id,
-         sub2api_email,
-         sub2api_username,
-         linuxdo_subject,
-         notes
-       )
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (sub2api_user_id)
-       DO UPDATE SET
-         sub2api_email = EXCLUDED.sub2api_email,
-         sub2api_username = EXCLUDED.sub2api_username,
-         linuxdo_subject = EXCLUDED.linuxdo_subject,
-         notes = EXCLUDED.notes
-       RETURNING id,
-                 sub2api_user_id,
-                 sub2api_email,
-                 sub2api_username,
-                 linuxdo_subject,
-                 notes,
-                 created_at`,
-      [
-        input.sub2apiUserId,
-        input.email,
-        input.username,
-        input.linuxdoSubject,
-        input.notes
-      ]
-    );
-    const row = result.rows[0];
-    return {
-      id: Number(row.id),
-      sub2apiUserId: Number(row.sub2api_user_id),
-      email: String(row.sub2api_email ?? ''),
-      username: String(row.sub2api_username ?? ''),
-      linuxdoSubject:
-        typeof row.linuxdo_subject === 'string' && row.linuxdo_subject.trim() !== ''
-          ? String(row.linuxdo_subject)
-          : null,
-      notes: String(row.notes ?? ''),
-      createdAt: String(row.created_at)
-    };
+    return this.withTransaction(async (client) => {
+      const existingByUserId = await client.query(
+        `SELECT id
+         FROM welfare_admin_whitelist
+         WHERE sub2api_user_id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [input.sub2apiUserId]
+      );
+
+      if ((existingByUserId.rowCount ?? 0) > 0) {
+        const updated = await client.query(
+          `UPDATE welfare_admin_whitelist
+           SET sub2api_email = $2,
+               sub2api_username = $3,
+               linuxdo_subject = $4,
+               notes = $5
+           WHERE id = $1
+           RETURNING id,
+                     sub2api_user_id,
+                     sub2api_email,
+                     sub2api_username,
+                     linuxdo_subject,
+                     notes,
+                     created_at`,
+          [
+            Number(existingByUserId.rows[0]?.id),
+            input.email,
+            input.username,
+            input.linuxdoSubject,
+            input.notes
+          ]
+        );
+
+        return this.mapAdminWhitelistItem(updated.rows[0]);
+      }
+
+      if (input.linuxdoSubject) {
+        const existingBySubject = await client.query(
+          `SELECT id
+           FROM welfare_admin_whitelist
+           WHERE linuxdo_subject = $1
+           LIMIT 1
+           FOR UPDATE`,
+          [input.linuxdoSubject]
+        );
+
+        if ((existingBySubject.rowCount ?? 0) > 0) {
+          const updated = await client.query(
+            `UPDATE welfare_admin_whitelist
+             SET sub2api_user_id = $2,
+                 sub2api_email = $3,
+                 sub2api_username = $4,
+                 linuxdo_subject = $5,
+                 notes = $6
+             WHERE id = $1
+             RETURNING id,
+                       sub2api_user_id,
+                       sub2api_email,
+                       sub2api_username,
+                       linuxdo_subject,
+                       notes,
+                       created_at`,
+            [
+              Number(existingBySubject.rows[0]?.id),
+              input.sub2apiUserId,
+              input.email,
+              input.username,
+              input.linuxdoSubject,
+              input.notes
+            ]
+          );
+
+          return this.mapAdminWhitelistItem(updated.rows[0]);
+        }
+      }
+
+      const inserted = await client.query(
+        `INSERT INTO welfare_admin_whitelist (
+           sub2api_user_id,
+           sub2api_email,
+           sub2api_username,
+           linuxdo_subject,
+           notes
+         )
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id,
+                   sub2api_user_id,
+                   sub2api_email,
+                   sub2api_username,
+                   linuxdo_subject,
+                   notes,
+                   created_at`,
+        [
+          input.sub2apiUserId,
+          input.email,
+          input.username,
+          input.linuxdoSubject,
+          input.notes
+        ]
+      );
+
+      return this.mapAdminWhitelistItem(inserted.rows[0]);
+    });
   }
 
   async removeAdminWhitelist(id: number): Promise<boolean> {
@@ -1010,6 +1059,22 @@ export class WelfareRepository {
       sortOrder: Number(row.sort_order ?? 0),
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at ?? row.created_at)
+    };
+  }
+
+  private mapAdminWhitelistItem(row: Record<string, unknown>): AdminWhitelistItem {
+    return {
+      id: Number(row.id),
+      sub2apiUserId:
+        row.sub2api_user_id == null ? null : Number(row.sub2api_user_id),
+      email: String(row.sub2api_email ?? ''),
+      username: String(row.sub2api_username ?? ''),
+      linuxdoSubject:
+        typeof row.linuxdo_subject === 'string' && row.linuxdo_subject.trim() !== ''
+          ? String(row.linuxdo_subject)
+          : null,
+      notes: String(row.notes ?? ''),
+      createdAt: String(row.created_at)
     };
   }
 

@@ -533,11 +533,11 @@ export function AdminPage() {
               )}
               <Icon name={item.icon} size={16} />
               <span>{item.label}</span>
-              <span className="admin-nav-badge">
-                {item.id === 'checkins'
-                  ? stats?.total_checkins ?? 0
+                <span className="admin-nav-badge">
+                  {item.id === 'checkins'
+                    ? stats?.total_checkins ?? 0
                   : item.id === 'distributionDetection'
-                    ? riskOverview?.open_event_count ?? 0
+                    ? (riskOverview?.open_event_count ?? 0) + (riskOverview?.observe_count_1h ?? 0)
                   : item.id === 'resetRecords'
                       ? settings?.reset_enabled ? 'ON' : 'OFF'
                   : item.id === 'redeemCodes'

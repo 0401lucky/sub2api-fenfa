@@ -5,6 +5,8 @@ import type {
   AdminRiskEvent,
   AdminRiskEventList,
   AdminRiskEventQuery,
+  AdminRiskObservation,
+  AdminRiskObservationList,
   AdminRiskOverview
 } from '../types';
 
@@ -73,8 +75,12 @@ function describeEventStatus(status: AdminRiskEvent['status']) {
   return '当前仍在锁定期内，福利站和主站都维持封禁。';
 }
 
-function buildIdentityMark(item: AdminRiskEvent): string {
-  const source = (item.sub2apiUsername || item.sub2apiEmail || String(item.sub2apiUserId)).trim();
+function buildIdentityMark(input: {
+  sub2apiUserId: number;
+  sub2apiEmail: string;
+  sub2apiUsername?: string;
+}): string {
+  const source = (input.sub2apiUsername || input.sub2apiEmail || String(input.sub2apiUserId)).trim();
   return source.slice(0, 2).toUpperCase();
 }
 
@@ -87,7 +93,9 @@ export function AdminDistributionDetectionPanel({
 }: AdminDistributionDetectionPanelProps) {
   const [filters, setFilters] = useState<AdminRiskEventQuery>(defaultFilters);
   const [list, setList] = useState<AdminRiskEventList | null>(null);
+  const [observations, setObservations] = useState<AdminRiskObservationList | null>(null);
   const [loading, setLoading] = useState(true);
+  const [observationsLoading, setObservationsLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [releaseReason, setReleaseReason] = useState('');
@@ -99,6 +107,10 @@ export function AdminDistributionDetectionPanel({
   useEffect(() => {
     void loadEvents(filters);
   }, [filters]);
+
+  useEffect(() => {
+    void loadObservations();
+  }, []);
 
   async function refreshOverview() {
     try {
@@ -131,11 +143,31 @@ export function AdminDistributionDetectionPanel({
     }
   }
 
+  async function loadObservations() {
+    setObservationsLoading(true);
+    try {
+      const result = await api.listAdminRiskObservations({
+        page: 1,
+        page_size: 20
+      });
+      setObservations(result);
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        await onUnauthorized();
+        return;
+      }
+
+      onError(err instanceof Error ? err.message : '观察名单加载失败');
+    } finally {
+      setObservationsLoading(false);
+    }
+  }
+
   async function handleManualScan() {
     setScanning(true);
     try {
       const result = await api.scanAdminRiskEvents();
-      await Promise.all([refreshOverview(), loadEvents(filters)]);
+      await Promise.all([refreshOverview(), loadObservations(), loadEvents(filters)]);
       onSuccess(
         `手动扫描完成：命中 ${result.matched_user_count} 人，新建 ${result.created_event_count} 条，刷新 ${result.refreshed_event_count} 条`
       );
@@ -164,7 +196,7 @@ export function AdminDistributionDetectionPanel({
       await api.releaseAdminRiskEvent(item.id, {
         reason: releaseReason.trim() || undefined
       });
-      await Promise.all([refreshOverview(), loadEvents(filters)]);
+      await Promise.all([refreshOverview(), loadObservations(), loadEvents(filters)]);
       onSuccess(`已恢复用户 #${item.sub2apiUserId}`);
     } catch (err) {
       if (isUnauthorizedError(err)) {
@@ -192,6 +224,13 @@ export function AdminDistributionDetectionPanel({
 
             <div className="distribution-metric-grid">
               <article className="distribution-metric-card">
+                <span className="distribution-metric-label">观察名单</span>
+                <strong className="distribution-metric-value">
+                  {overview?.observe_count_1h ?? 0}
+                </strong>
+                <small>1 小时内达到观察线</small>
+              </article>
+              <article className="distribution-metric-card">
                 <span className="distribution-metric-label">封禁中</span>
                 <strong className="distribution-metric-value">
                   {overview?.active_event_count ?? 0}
@@ -212,6 +251,21 @@ export function AdminDistributionDetectionPanel({
                 </strong>
                 <small>后台与鉴权仍会继续拦截</small>
               </article>
+            </div>
+
+            <div className="distribution-window-strip">
+              <span className="distribution-window-pill">
+                1h 命中 {overview?.windows.window_1h_observe_count ?? 0}
+              </span>
+              <span className="distribution-window-pill">
+                3h 命中 {overview?.windows.window_3h_observe_count ?? 0}
+              </span>
+              <span className="distribution-window-pill">
+                6h 命中 {overview?.windows.window_6h_observe_count ?? 0}
+              </span>
+              <span className="distribution-window-pill">
+                24h 命中 {overview?.windows.window_24h_observe_count ?? 0}
+              </span>
             </div>
           </div>
 
@@ -269,7 +323,7 @@ export function AdminDistributionDetectionPanel({
                 </button>
                 <button
                   className="button ghost"
-                  onClick={() => void Promise.all([refreshOverview(), loadEvents(filters)])}
+                  onClick={() => void Promise.all([refreshOverview(), loadObservations(), loadEvents(filters)])}
                 >
                   刷新列表
                 </button>
@@ -277,6 +331,108 @@ export function AdminDistributionDetectionPanel({
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="panel distribution-events-panel">
+        <div className="admin-panel-head distribution-events-head">
+          <div className="distribution-events-copy">
+            <span className="distribution-kicker">Observation Deck</span>
+            <h3 className="distribution-events-title">观察名单</h3>
+            <p>
+              这些用户在 1 小时内已经达到观察线，但还没到自动封禁线。优先看
+              1h/3h/6h/24h 的 IP 变化，再决定是否继续观察或手动处理。
+            </p>
+          </div>
+        </div>
+
+        {observationsLoading ? (
+          <p className="loading-text">正在加载观察名单...</p>
+        ) : !observations || observations.items.length === 0 ? (
+          <div className="empty-state">当前没有进入观察线的用户。</div>
+        ) : (
+          <div className="distribution-observation-list">
+            {observations.items.map((item) => (
+              <article key={item.sub2api_user_id} className="distribution-observation-card">
+                <div className="distribution-observation-head">
+                  <div className="distribution-event-identity">
+                    <div className="distribution-event-mark">
+                      {buildIdentityMark({
+                        sub2apiUserId: item.sub2api_user_id,
+                        sub2apiEmail: item.sub2api_email,
+                        sub2apiUsername: item.sub2api_username
+                      })}
+                    </div>
+                    <div className="distribution-event-copy">
+                      <strong>{item.sub2api_username || item.sub2api_email}</strong>
+                      <span className="muted admin-redeem-meta">{item.sub2api_email}</span>
+                      <span className="muted admin-redeem-meta">
+                        sub2api #{item.sub2api_user_id}
+                        {item.linuxdo_subject ? ` · ${item.linuxdo_subject}` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="distribution-event-badges">
+                    <span className="status-tag pending">观察中</span>
+                    <span className="chip">主站 {item.sub2api_status || '未知'}</span>
+                  </div>
+                </div>
+
+                <div className="distribution-observation-grid">
+                  <section className="distribution-event-block">
+                    <span className="distribution-block-kicker">多窗口统计</span>
+                    <div className="distribution-fact-grid">
+                      <div>
+                        <span>1h</span>
+                        <strong>{item.window_1h_ip_count} 个 IP</strong>
+                      </div>
+                      <div>
+                        <span>3h</span>
+                        <strong>{item.window_3h_ip_count} 个 IP</strong>
+                      </div>
+                      <div>
+                        <span>6h</span>
+                        <strong>{item.window_6h_ip_count} 个 IP</strong>
+                      </div>
+                      <div>
+                        <span>24h</span>
+                        <strong>{item.window_24h_ip_count} 个 IP</strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="distribution-event-block distribution-event-evidence-block">
+                    <div className="distribution-event-block-head">
+                      <span className="distribution-block-kicker">1h IP 证据</span>
+                      <strong>{item.window_1h_ip_count} 个</strong>
+                    </div>
+                    <div className="distribution-ip-cloud">
+                      {item.ip_samples.map((ip) => (
+                        <span key={ip} className="distribution-ip-pill">
+                          {ip}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="distribution-event-block">
+                    <span className="distribution-block-kicker">最近命中</span>
+                    <div className="distribution-fact-stack">
+                      <div className="distribution-fact-row">
+                        <span>首次命中</span>
+                        <strong>{formatAdminDateTime(item.first_hit_at)}</strong>
+                      </div>
+                      <div className="distribution-fact-row">
+                        <span>最近命中</span>
+                        <strong>{formatAdminDateTime(item.last_hit_at)}</strong>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="panel distribution-events-panel">

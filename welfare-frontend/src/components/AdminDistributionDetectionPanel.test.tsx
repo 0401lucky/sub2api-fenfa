@@ -5,6 +5,7 @@ import { AdminDistributionDetectionPanel } from './AdminDistributionDetectionPan
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
     getAdminRiskOverview: vi.fn(),
+    listAdminRiskObservations: vi.fn(),
     listAdminRiskEvents: vi.fn(),
     scanAdminRiskEvents: vi.fn(),
     releaseAdminRiskEvent: vi.fn()
@@ -33,6 +34,13 @@ describe('AdminDistributionDetectionPanel', () => {
       active_event_count: 1,
       pending_release_count: 1,
       open_event_count: 2,
+      observe_count_1h: 1,
+      windows: {
+        window_1h_observe_count: 1,
+        window_3h_observe_count: 2,
+        window_6h_observe_count: 3,
+        window_24h_observe_count: 4
+      },
       last_scan: {
         last_started_at: '2026-03-31T00:00:00.000Z',
         last_finished_at: '2026-03-31T00:05:00.000Z',
@@ -41,6 +49,29 @@ describe('AdminDistributionDetectionPanel', () => {
         last_trigger_source: 'scheduled',
         updated_at: '2026-03-31T00:05:00.000Z'
       }
+    });
+    mockApi.listAdminRiskObservations.mockResolvedValue({
+      items: [
+        {
+          sub2api_user_id: 8,
+          sub2api_email: 'observe@example.com',
+          sub2api_username: 'observe-user',
+          linuxdo_subject: 'observe-user',
+          sub2api_role: 'user',
+          sub2api_status: 'active',
+          window_1h_ip_count: 4,
+          window_3h_ip_count: 5,
+          window_6h_ip_count: 5,
+          window_24h_ip_count: 5,
+          ip_samples: ['9.9.9.1', '9.9.9.2'],
+          first_hit_at: '2026-03-31T00:10:00.000Z',
+          last_hit_at: '2026-03-31T00:40:00.000Z'
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1
     });
     mockApi.listAdminRiskEvents.mockResolvedValue({
       items: [
@@ -94,6 +125,7 @@ describe('AdminDistributionDetectionPanel', () => {
     );
 
     expect(await screen.findByText('normal-user')).toBeInTheDocument();
+    expect(screen.getByText('observe-user')).toBeInTheDocument();
     expect(screen.getByText('1.1.1.1')).toBeInTheDocument();
     expect(onOverviewChange).toHaveBeenCalled();
   });

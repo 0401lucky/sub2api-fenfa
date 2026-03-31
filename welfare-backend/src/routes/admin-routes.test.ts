@@ -85,7 +85,10 @@ vi.mock('../services/redeem-service.js', () => ({
 }));
 
 vi.mock('../services/sub2api-client.js', () => ({
-  sub2apiClient: mockSub2apiClient
+  sub2apiClient: mockSub2apiClient,
+  Sub2apiResponseError: class extends Error {
+    body = '';
+  }
 }));
 
 vi.mock('../services/reset-service.js', () => ({
@@ -211,6 +214,19 @@ describe('adminRouter', () => {
         grantStatus: 'success'
       })
     );
+  });
+
+  it('POST /checkins/:id/retry 在主站加余额失败时返回 502', async () => {
+    const { HttpError } = await import('../utils/http.js');
+    mockCheckinService.retryFailedCheckin.mockRejectedValue(
+      new HttpError(502, 'bad gateway', 'sub2api failed')
+    );
+
+    const app = await createTestApp();
+    const response = await request(app).post('/api/admin/checkins/12/retry');
+
+    expect(response.status).toBe(502);
+    expect(response.body.message).toBe('SUB2API_GRANT_FAILED');
   });
 
   it('GET /user-cleanup/candidates 返回候选用户分页结果', async () => {
@@ -356,5 +372,18 @@ describe('adminRouter', () => {
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({ deleted: true });
     expect(mockWelfareRepository.removeAdminWhitelist).toHaveBeenCalledWith(2);
+  });
+
+  it('POST /redeem-claims/:id/retry 在主站加余额失败时返回 502', async () => {
+    const { Sub2apiResponseError } = await import('../services/sub2api-client.js');
+    mockRedeemService.retryRedeemClaim.mockRejectedValue(
+      new Sub2apiResponseError('quota locked')
+    );
+
+    const app = await createTestApp();
+    const response = await request(app).post('/api/admin/redeem-claims/5/retry');
+
+    expect(response.status).toBe(502);
+    expect(response.body.message).toBe('SUB2API_GRANT_FAILED');
   });
 });

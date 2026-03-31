@@ -8,6 +8,7 @@ import type {
   AdminOverview,
   AdminRiskEventList,
   AdminRiskEventQuery,
+  AdminRiskObservationList,
   AdminRiskOverview,
   AdminRiskScanResult,
   AdminResetRecordList,
@@ -226,7 +227,6 @@ export const api = {
     }>(`/api/admin/checkins/${id}/retry`, {
       method: 'POST'
     }),
-  getRiskOverview: () => request<AdminRiskOverview>('/api/admin/risk-events/overview'),
   listWhitelist: () => request<WhitelistItem[]>('/api/admin/whitelist'),
   searchAdminSub2apiUsers: (query: string) =>
     request<AdminUserSearchItem[]>(
@@ -261,6 +261,18 @@ export const api = {
     const suffix = query.toString();
     return request<AdminRiskEventList>(
       `/api/admin/risk-events${suffix ? `?${suffix}` : ''}`
+    );
+  },
+  listAdminRiskObservations: (params: {
+    page?: number;
+    page_size?: number;
+  } = {}) => {
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.page_size) query.set('page_size', String(params.page_size));
+    const suffix = query.toString();
+    return request<AdminRiskObservationList>(
+      `/api/admin/risk-events/observations${suffix ? `?${suffix}` : ''}`
     );
   },
   scanAdminRiskEvents: () =>

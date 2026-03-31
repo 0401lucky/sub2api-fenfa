@@ -96,6 +96,69 @@ describe('distributionDetectionService helpers', () => {
 });
 
 describe('DistributionDetectionService access guard', () => {
+  it('4 个不同 IP 只进入观察，不会触发封禁', async () => {
+    const repository = {
+      syncExpiredEvents: vi.fn().mockResolvedValue(0),
+      getBlockingEventByUserId: vi.fn().mockResolvedValue(null)
+    };
+    const sessionState = {
+      getSessionVersion: vi.fn().mockResolvedValue(1),
+      bumpSessionVersion: vi.fn()
+    };
+    const sub2api = {
+      getAdminUserById: vi.fn().mockResolvedValue({
+        id: 7,
+        email: 'normal-user@example.com',
+        username: 'normal-user',
+        role: 'user',
+        status: 'active'
+      }),
+      listAdminUsageLogs: vi.fn().mockResolvedValue({
+        items: [
+          { id: 1, userId: 7, ipAddress: '1.1.1.1', createdAt: new Date().toISOString(), user: null },
+          { id: 2, userId: 7, ipAddress: '2.2.2.2', createdAt: new Date().toISOString(), user: null },
+          { id: 3, userId: 7, ipAddress: '3.3.3.3', createdAt: new Date().toISOString(), user: null },
+          { id: 4, userId: 7, ipAddress: '4.4.4.4', createdAt: new Date().toISOString(), user: null }
+        ],
+        total: 4,
+        page: 1,
+        pageSize: 200,
+        pages: 1
+      }),
+      updateAdminUserStatus: vi.fn()
+    };
+    const welfare = {
+      listAdminWhitelist: vi.fn().mockResolvedValue([]),
+      hasAdminUserId: vi.fn().mockResolvedValue(false),
+      hasLegacyAdminSubject: vi.fn().mockResolvedValue(false)
+    };
+
+    const service = new DistributionDetectionService(
+      repository as never,
+      sessionState as never,
+      sub2api as never,
+      welfare as never,
+      console
+    );
+
+    const decision = await service.evaluateAccess(
+      {
+        sub2apiUserId: 7,
+        email: 'normal-user@example.com',
+        username: 'normal-user',
+        linuxdoSubject: 'normal-user'
+      },
+      'auth'
+    );
+
+    expect(decision).toEqual({
+      blockedEvent: null,
+      sessionInvalidated: false
+    });
+    expect(sessionState.bumpSessionVersion).not.toHaveBeenCalled();
+    expect(sub2api.updateAdminUserStatus).not.toHaveBeenCalled();
+  });
+
   it('管理员账号会被豁免，不会进入风险拦截', async () => {
     const repository = {
       syncExpiredEvents: vi.fn().mockResolvedValue(0),
@@ -190,5 +253,137 @@ describe('DistributionDetectionService access guard', () => {
     expect(decision.sessionInvalidated).toBe(false);
     expect(sessionState.bumpSessionVersion).not.toHaveBeenCalled();
     expect(sub2api.updateAdminUserStatus).not.toHaveBeenCalled();
+  });
+
+  it('风险事件列表刷新时会同步主站状态漂移', async () => {
+    const existingEvent = createRiskEvent();
+    const repository = {
+      syncExpiredEvents: vi.fn().mockResolvedValue(0),
+      listRiskEvents: vi.fn().mockResolvedValue({
+        items: [existingEvent],
+        total: 1
+      }),
+      updateRiskEventSync: vi.fn().mockResolvedValue({
+        ...existingEvent,
+        sub2apiStatus: 'active',
+        mainSiteSyncStatus: 'failed',
+        mainSiteSyncError: '主站状态已与本地封禁事件不一致'
+      })
+    };
+    const sessionState = {
+      getSessionVersion: vi.fn(),
+      bumpSessionVersion: vi.fn()
+    };
+    const sub2api = {
+      getAdminUserById: vi.fn().mockResolvedValue({
+        id: 42,
+        email: 'normal-user@example.com',
+        username: 'normal-user',
+        role: 'user',
+        status: 'active'
+      }),
+      listAdminUsageLogs: vi.fn(),
+      updateAdminUserStatus: vi.fn()
+    };
+    const welfare = {
+      listAdminWhitelist: vi.fn(),
+      hasAdminUserId: vi.fn(),
+      hasLegacyAdminSubject: vi.fn()
+    };
+
+    const service = new DistributionDetectionService(
+      repository as never,
+      sessionState as never,
+      sub2api as never,
+      welfare as never,
+      console
+    );
+
+    const result = await service.listEvents({
+      page: 1,
+      pageSize: 20
+    });
+
+    expect(repository.updateRiskEventSync).toHaveBeenCalledWith(1, {
+      sub2apiStatus: 'active',
+      mainSiteSyncStatus: 'failed',
+      mainSiteSyncError: '主站状态已与本地封禁事件不一致'
+    });
+    expect(result.items[0]).toMatchObject({
+      sub2apiStatus: 'active',
+      mainSiteSyncStatus: 'failed'
+    });
+  });
+
+  it('观察名单只返回 4 到 5 个不同 IP 的用户', async () => {
+    const now = new Date().toISOString();
+    const repository = {
+      syncExpiredEvents: vi.fn().mockResolvedValue(0)
+    };
+    const sessionState = {
+      getSessionVersion: vi.fn(),
+      bumpSessionVersion: vi.fn()
+    };
+    const sub2api = {
+      getAdminUserById: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: 7,
+          email: 'observe@example.com',
+          username: 'observe-user',
+          role: 'user',
+          status: 'active'
+        })
+        .mockResolvedValueOnce({
+          id: 8,
+          email: 'ban@example.com',
+          username: 'ban-user',
+          role: 'user',
+          status: 'active'
+        }),
+      listAdminUsageLogs: vi.fn().mockResolvedValue({
+        items: [
+          { id: 1, userId: 7, ipAddress: '1.1.1.1', createdAt: now, user: null },
+          { id: 2, userId: 7, ipAddress: '2.2.2.2', createdAt: now, user: null },
+          { id: 3, userId: 7, ipAddress: '3.3.3.3', createdAt: now, user: null },
+          { id: 4, userId: 7, ipAddress: '4.4.4.4', createdAt: now, user: null },
+          { id: 5, userId: 8, ipAddress: '5.5.5.1', createdAt: now, user: null },
+          { id: 6, userId: 8, ipAddress: '5.5.5.2', createdAt: now, user: null },
+          { id: 7, userId: 8, ipAddress: '5.5.5.3', createdAt: now, user: null },
+          { id: 8, userId: 8, ipAddress: '5.5.5.4', createdAt: now, user: null },
+          { id: 9, userId: 8, ipAddress: '5.5.5.5', createdAt: now, user: null },
+          { id: 10, userId: 8, ipAddress: '5.5.5.6', createdAt: now, user: null }
+        ],
+        total: 10,
+        page: 1,
+        pageSize: 200,
+        pages: 1
+      }),
+      updateAdminUserStatus: vi.fn()
+    };
+    const welfare = {
+      listAdminWhitelist: vi.fn().mockResolvedValue([]),
+      hasAdminUserId: vi.fn(),
+      hasLegacyAdminSubject: vi.fn()
+    };
+
+    const service = new DistributionDetectionService(
+      repository as never,
+      sessionState as never,
+      sub2api as never,
+      welfare as never,
+      console
+    );
+
+    const result = await service.listObservations({
+      page: 1,
+      pageSize: 20
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      sub2apiUserId: 7,
+      window1hIpCount: 4
+    });
   });
 });

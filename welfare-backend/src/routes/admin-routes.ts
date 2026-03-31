@@ -32,9 +32,10 @@ import {
   ForbiddenError as RedeemForbiddenError,
   NotFoundError as RedeemNotFoundError
 } from '../services/redeem-service.js';
-import { sub2apiClient } from '../services/sub2api-client.js';
+import { Sub2apiResponseError, sub2apiClient } from '../services/sub2api-client.js';
 import { extractLinuxDoSubjectFromEmail, isSafeLinuxDoSubject } from '../utils/oauth.js';
 import { isValidTimezone } from '../utils/date.js';
+import { HttpError } from '../utils/http.js';
 import { fail, ok } from '../utils/response.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
@@ -197,6 +198,13 @@ function toAdminRiskOverviewPayload(overview: {
   activeEventCount: number;
   pendingReleaseCount: number;
   openEventCount: number;
+  observeCount1h: number;
+  windows: {
+    window1hObserveCount: number;
+    window3hObserveCount: number;
+    window6hObserveCount: number;
+    window24hObserveCount: number;
+  };
   lastScan: {
     lastStartedAt: string | null;
     lastFinishedAt: string | null;
@@ -210,6 +218,13 @@ function toAdminRiskOverviewPayload(overview: {
     active_event_count: overview.activeEventCount,
     pending_release_count: overview.pendingReleaseCount,
     open_event_count: overview.openEventCount,
+    observe_count_1h: overview.observeCount1h,
+    windows: {
+      window_1h_observe_count: overview.windows.window1hObserveCount,
+      window_3h_observe_count: overview.windows.window3hObserveCount,
+      window_6h_observe_count: overview.windows.window6hObserveCount,
+      window_24h_observe_count: overview.windows.window24hObserveCount
+    },
     last_scan: {
       last_started_at: overview.lastScan.lastStartedAt,
       last_finished_at: overview.lastScan.lastFinishedAt,
@@ -219,6 +234,46 @@ function toAdminRiskOverviewPayload(overview: {
       updated_at: overview.lastScan.updatedAt
     }
   };
+}
+
+function toAdminRiskObservationPayload(item: {
+  sub2apiUserId: number;
+  sub2apiEmail: string;
+  sub2apiUsername: string;
+  linuxdoSubject: string | null;
+  sub2apiRole: 'admin' | 'user';
+  sub2apiStatus: string;
+  window1hIpCount: number;
+  window3hIpCount: number;
+  window6hIpCount: number;
+  window24hIpCount: number;
+  ipSamples: string[];
+  firstHitAt: string;
+  lastHitAt: string;
+}) {
+  return {
+    sub2api_user_id: item.sub2apiUserId,
+    sub2api_email: item.sub2apiEmail,
+    sub2api_username: item.sub2apiUsername,
+    linuxdo_subject: item.linuxdoSubject,
+    sub2api_role: item.sub2apiRole,
+    sub2api_status: item.sub2apiStatus,
+    window_1h_ip_count: item.window1hIpCount,
+    window_3h_ip_count: item.window3hIpCount,
+    window_6h_ip_count: item.window6hIpCount,
+    window_24h_ip_count: item.window24hIpCount,
+    ip_samples: item.ipSamples,
+    first_hit_at: item.firstHitAt,
+    last_hit_at: item.lastHitAt
+  };
+}
+
+function toAdminUpstreamFailureDetail(error: HttpError | Sub2apiResponseError): string {
+  if (error instanceof Sub2apiResponseError) {
+    return error.message.slice(0, 300);
+  }
+
+  return `主站接口异常：HTTP ${error.status}`;
 }
 
 function toAdminBlindboxItemPayload(item: {
@@ -366,6 +421,11 @@ const riskEventsQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   page_size: z.coerce.number().int().positive().max(200).optional(),
   status: z.enum(['active', 'pending_release', 'released']).optional()
+});
+
+const riskObservationsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  page_size: z.coerce.number().int().positive().max(200).optional()
 });
 
 const riskReleaseSchema = z.object({
@@ -572,6 +632,11 @@ adminRouter.post('/checkins/:id/retry', asyncHandler(async (req, res) => {
       fail(res, 409, 'CHECKIN_CONFLICT', error.message);
       return;
     }
+    if (error instanceof HttpError || error instanceof Sub2apiResponseError) {
+      console.error('[admin] 签到补发失败', error);
+      fail(res, 502, 'SUB2API_GRANT_FAILED', toAdminUpstreamFailureDetail(error));
+      return;
+    }
     console.error('[admin] 签到补发失败', error);
     fail(res, 500, 'CHECKIN_RETRY_FAILED', '补发失败，请稍后重试');
   }
@@ -625,6 +690,29 @@ adminRouter.get('/user-cleanup/candidates', asyncHandler(async (req, res) => {
 adminRouter.get('/risk-events/overview', asyncHandler(async (_req, res) => {
   const overview = await distributionDetectionService.getOverview();
   ok(res, toAdminRiskOverviewPayload(overview));
+}));
+
+adminRouter.get('/risk-events/observations', asyncHandler(async (req, res) => {
+  const parsed = riskObservationsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    fail(res, 400, 'BAD_REQUEST', '查询参数非法');
+    return;
+  }
+
+  const page = parsed.data.page ?? 1;
+  const pageSize = parsed.data.page_size ?? 20;
+  const result = await distributionDetectionService.listObservations({
+    page,
+    pageSize
+  });
+
+  ok(res, {
+    items: result.items.map((item) => toAdminRiskObservationPayload(item)),
+    total: result.total,
+    page,
+    page_size: pageSize,
+    pages: Math.max(1, Math.ceil(result.total / pageSize))
+  });
 }));
 
 adminRouter.get('/risk-events', asyncHandler(async (req, res) => {
@@ -988,6 +1076,11 @@ adminRouter.post('/redeem-claims/:id/retry', asyncHandler(async (req, res) => {
     }
     if (error instanceof RedeemForbiddenError) {
       fail(res, 403, 'REDEEM_UNAVAILABLE', error.message);
+      return;
+    }
+    if (error instanceof HttpError || error instanceof Sub2apiResponseError) {
+      console.error('[admin] 兑换补发失败', error);
+      fail(res, 502, 'SUB2API_GRANT_FAILED', toAdminUpstreamFailureDetail(error));
       return;
     }
     console.error('[admin] 兑换补发失败', error);

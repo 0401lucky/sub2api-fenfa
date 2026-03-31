@@ -8,6 +8,7 @@ const { mockUseAuth, mockApi } = vi.hoisted(() => ({
   mockApi: {
     getAdminOverview: vi.fn(),
     getAdminRiskOverview: vi.fn(),
+    listAdminRiskObservations: vi.fn(),
     listAdminRedeemCodes: vi.fn(),
     listAdminCheckins: vi.fn(),
     listAdminRedeemClaims: vi.fn(),
@@ -111,6 +112,13 @@ describe('AdminPage dashboard', () => {
       active_event_count: 1,
       pending_release_count: 2,
       open_event_count: 3,
+      observe_count_1h: 4,
+      windows: {
+        window_1h_observe_count: 4,
+        window_3h_observe_count: 5,
+        window_6h_observe_count: 6,
+        window_24h_observe_count: 8
+      },
       last_scan: {
         last_started_at: null,
         last_finished_at: null,
@@ -126,6 +134,13 @@ describe('AdminPage dashboard', () => {
       total: 0,
       page: 1,
       page_size: 10,
+      pages: 1
+    });
+    mockApi.listAdminRiskObservations.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
       pages: 1
     });
     mockApi.listAdminRedeemClaims.mockResolvedValue({

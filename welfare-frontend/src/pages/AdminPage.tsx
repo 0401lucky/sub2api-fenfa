@@ -305,13 +305,23 @@ export function AdminPage() {
     setError('');
     setMessage('');
     try {
-      const created = await api.addWhitelist({
+      const payload = {
         sub2api_user_id: targetUser.sub2api_user_id,
         email: targetUser.email,
         username: targetUser.username,
-        linuxdo_subject: targetUser.linuxdo_subject,
         notes: newNotes.trim() || undefined
-      });
+      } as {
+        sub2api_user_id: number;
+        email: string;
+        username: string;
+        linuxdo_subject?: string | null;
+        notes?: string;
+      };
+      if (targetUser.linuxdo_subject) {
+        payload.linuxdo_subject = targetUser.linuxdo_subject;
+      }
+
+      const created = await api.addWhitelist(payload);
       setWhitelist((current) =>
         [...current.filter((item) => item.id !== created.id), created].sort((a, b) => a.id - b.id)
       );

@@ -311,7 +311,7 @@ const whitelistCreateSchema = z.object({
   sub2api_user_id: z.number().int().positive(),
   email: z.string().email(),
   username: z.string().min(1).max(120),
-  linuxdo_subject: z.string().min(1).max(64).optional(),
+  linuxdo_subject: z.string().min(1).max(64).nullable().optional(),
   notes: z.string().max(500).optional()
 });
 const sub2apiUserSearchSchema = z.object({

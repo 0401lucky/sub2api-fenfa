@@ -265,6 +265,38 @@ describe('adminRouter', () => {
     expect(response.body.data.success_count).toBe(1);
   });
 
+  it('POST /whitelist 允许 linuxdo_subject 为 null', async () => {
+    mockWelfareRepository.addAdminWhitelist.mockResolvedValue({
+      id: 3,
+      sub2apiUserId: 99,
+      email: 'lucky@bluepha.org',
+      username: 'lucky',
+      linuxdoSubject: null,
+      notes: 'manual',
+      createdAt: '2026-03-31T00:00:00.000Z'
+    });
+
+    const app = await createTestApp();
+    const response = await request(app)
+      .post('/api/admin/whitelist')
+      .send({
+        sub2api_user_id: 99,
+        email: 'lucky@bluepha.org',
+        username: 'lucky',
+        linuxdo_subject: null,
+        notes: 'manual'
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockWelfareRepository.addAdminWhitelist).toHaveBeenCalledWith({
+      sub2apiUserId: 99,
+      email: 'lucky@bluepha.org',
+      username: 'lucky',
+      linuxdoSubject: null,
+      notes: 'manual'
+    });
+  });
+
   it('DELETE /whitelist/:id 会阻止删除当前登录管理员', async () => {
     mockWelfareRepository.listAdminWhitelist.mockResolvedValue([
       {

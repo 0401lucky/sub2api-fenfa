@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from './Icon';
 import { useAuth } from '../lib/auth';
 
@@ -14,11 +15,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
+  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   async function handleLogout() {
     await logout();
@@ -30,67 +27,80 @@ export function AppShell() {
     : baseNavItems;
 
   return (
-    <div className="app-shell">
-      <header className="app-shell-header">
-        <div className="app-shell-header-inner">
-          <NavLink to="/checkin" className="app-shell-brand">
-            <span className="app-shell-brand-mark">WF</span>
-            <span className="app-shell-brand-copy">
-              <strong>Welfare Station</strong>
-              <small>签到 · 福利码 · 记录 · 重置</small>
-            </span>
-          </NavLink>
+    <div className="frontend-workspace">
+      <div className="frontend-floating-nav-wrapper">
+        <motion.nav 
+          className="frontend-floating-nav"
+          initial={{ y: -64, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 24 }}
+        >
+          <div className="frontend-nav-brand">
+            <span className="frontend-brand-mark">W</span>
+            <span>Station</span>
+          </div>
 
-          <button
-            type="button"
-            className="button ghost app-shell-menu-button"
-            onClick={() => setMenuOpen((current) => !current)}
-            aria-expanded={menuOpen}
-            aria-controls="app-shell-nav"
+          <div 
+            className="frontend-nav-links"
+            onMouseLeave={() => setHoveredPath(null)}
           >
-            <Icon name="grid" size={16} />
-            菜单
-          </button>
+            {navItems.map((item) => {
+              const isActive = location.pathname.startsWith(item.to);
+              const isHovered = hoveredPath === item.to;
+              
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onMouseEnter={() => setHoveredPath(item.to)}
+                  className={`frontend-nav-item ${isActive ? 'active' : ''}`}
+                >
+                  <Icon name={item.icon} size={14} />
+                  <span>{item.label}</span>
+                  
+                  {isActive && (
+                    <motion.div
+                      layoutId="frontend-nav-indicator"
+                      className="frontend-nav-highlight"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  {isHovered && !isActive && (
+                    <motion.div
+                      layoutId="frontend-nav-hover"
+                      className="frontend-nav-highlight"
+                      style={{ opacity: 0.5, zIndex: -2 }}
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
 
-          <div className="app-shell-user">
+          <div className="frontend-nav-user">
             {user?.avatar_url ? (
-              <img className="user-avatar user-avatar-sm" src={user.avatar_url} alt={user.username} />
+              <img className="frontend-user-avatar" src={user.avatar_url} alt={user.username} />
             ) : (
-              <span className="app-shell-user-fallback">{user?.username?.slice(0, 1) || 'U'}</span>
+              <div className="frontend-brand-mark" style={{ background: 'var(--ink-2)' }}>
+                {user?.username?.slice(0, 1) || 'U'}
+              </div>
             )}
-            <div className="app-shell-user-copy">
-              <strong>{user?.username}</strong>
-              <small>{user?.email}</small>
-            </div>
-            <button type="button" className="button danger" onClick={handleLogout}>
-              退出
+            <button 
+              type="button" 
+              className="frontend-user-logout" 
+              onClick={handleLogout}
+              title="退出登录"
+            >
+              <span style={{ fontSize: '12px', fontWeight: 'bold' }}>✕</span>
             </button>
           </div>
-        </div>
+        </motion.nav>
+      </div>
 
-        <div className="app-shell-nav-wrap">
-          <nav
-            id="app-shell-nav"
-            className={`app-shell-nav ${menuOpen ? 'open' : ''}`}
-            aria-label="主导航"
-          >
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `app-shell-nav-item ${isActive ? 'active' : ''}`
-                }
-              >
-                <Icon name={item.icon} size={16} />
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
-          </nav>
-        </div>
-      </header>
-
-      <main className="app-shell-main">
+      <main className="frontend-container">
         <Outlet />
       </main>
     </div>

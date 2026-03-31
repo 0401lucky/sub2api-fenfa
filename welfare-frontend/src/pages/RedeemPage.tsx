@@ -52,27 +52,24 @@ export function RedeemPage() {
 
   return (
     <motion.div
-      className="page utility-page"
+      className="frontend-container"
       variants={pageVariants}
       initial="initial"
       animate="animate"
       exit="exit"
     >
       <motion.div
-        className="utility-page-stack"
         variants={staggerContainer}
         initial="initial"
         animate="animate"
+        style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
       >
-        <motion.section variants={staggerItem} className="panel utility-hero">
-          <span className="eyebrow">Reward Exchange</span>
-          <h1 className="hero-title utility-title">福利码兑换</h1>
-          <p className="lead utility-lead">活动码和补发码统一在这里处理。</p>
-          <div className="utility-chip-row">
-            <span className="chip">单次兑换即时入账</span>
-            <span className="chip">失败原因直接回显</span>
-            <span className="chip">历史记录移到独立页面</span>
-          </div>
+        <motion.section variants={staggerItem} className="frontend-bento-hero">
+          <h1 className="frontend-bento-title">
+            <Icon name="ticket" size={20} />
+            凭证兑换 (Redeem Code)
+          </h1>
+          <p className="frontend-bento-desc">输入后台发放的活动码或补偿凭证，单次兑换的结果将在本页即刻回馈。</p>
         </motion.section>
 
         {(error || success) && (
@@ -82,49 +79,33 @@ export function RedeemPage() {
           </motion.div>
         )}
 
-        <motion.section variants={staggerItem} className="panel utility-form-panel">
-          <div className="section-head">
-            <h2 className="section-title">输入福利码</h2>
-          </div>
-          <div className="redeem-form-row">
-            <div className="field redeem-field">
-              <span>福利码 (Code)</span>
+        <motion.div variants={staggerItem} className="frontend-bento-grid" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="frontend-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', padding: '48px 24px' }}>
+            <Icon name="ticket" size={32} style={{ color: 'var(--ink-2)', marginBottom: '8px' }} />
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold' }}>输入兑换码</h2>
+            <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <input
+                className="frontend-input-modern"
                 type="text"
                 value={redeemCodeInput}
                 onChange={(event) => setRedeemCodeInput(event.target.value)}
                 placeholder="例如：WELCOME100"
                 disabled={submitting}
               />
-            </div>
-            <div className="redeem-action">
               <button
                 className="button primary wide"
                 disabled={redeemCodeInput.trim() === '' || submitting}
                 onClick={handleRedeem}
+                style={{ padding: '14px', borderRadius: '12px', fontSize: '15px' }}
               >
-                {submitting ? '兑换中...' : '立即兑换'}
+                {submitting ? '校验中...' : '提交兑换'}
               </button>
             </div>
+            <p className="frontend-bento-desc" style={{ marginTop: '16px', fontSize: '12px' }}>
+              兑换流水将被单独记录，你可以在「记录」页查看全部历史流水。
+            </p>
           </div>
-        </motion.section>
-
-        <motion.section variants={staggerItem} className="utility-grid">
-          <div className="panel utility-side-card">
-          <div className="utility-side-icon">
-            <Icon name="ticket" size={18} />
-          </div>
-            <strong>独立兑换入口</strong>
-            <p>避免继续把签到页拉长。</p>
-          </div>
-          <div className="panel utility-side-card">
-            <div className="utility-side-icon">
-              <Icon name="chart" size={18} />
-            </div>
-            <strong>记录单独查看</strong>
-            <p>历史流水统一放到“记录”页。</p>
-          </div>
-        </motion.section>
+        </motion.div>
       </motion.div>
     </motion.div>
   );

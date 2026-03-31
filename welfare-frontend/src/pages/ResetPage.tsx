@@ -6,12 +6,11 @@ import { api, isUnauthorizedError } from '../lib/api';
 import { pageVariants, staggerContainer, staggerItem } from '../lib/animations';
 import { formatAdminTime } from '../lib/admin-format';
 import { renderGrantTag } from '../lib/welfare-display';
+import { Icon } from '../components/Icon';
 import type { ResetHistoryItem, ResetStatus } from '../types';
 
 function formatBalance(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) {
-    return '--';
-  }
+  if (value == null || !Number.isFinite(value)) return '--';
   return value.toFixed(2);
 }
 
@@ -31,10 +30,7 @@ export function ResetPage() {
   }
 
   async function loadAll(showLoading = false) {
-    if (showLoading) {
-      setLoading(true);
-    }
-
+    if (showLoading) setLoading(true);
     setError('');
     try {
       const [resetStatus, resetHistory] = await Promise.all([
@@ -48,12 +44,9 @@ export function ResetPage() {
         await redirectToLogin();
         return;
       }
-
       setError(err instanceof Error ? err.message : '重置状态加载失败');
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      if (showLoading) setLoading(false);
     }
   }
 
@@ -62,29 +55,20 @@ export function ResetPage() {
   }, []);
 
   async function handleApply() {
-    if (!status?.can_apply || applying) {
-      return;
-    }
-
+    if (!status?.can_apply || applying) return;
     setApplying(true);
     setError('');
     setSuccess('');
-
     try {
       const result = await api.applyReset();
-      setSuccess(
-        `重置成功，本次补差 ${result.granted_balance}，当前余额 ${result.new_balance}`
-      );
+      setSuccess(`重置成功，本次补差 ${result.granted_balance}，当前余额 ${result.new_balance}`);
       await loadAll();
     } catch (err) {
       if (isUnauthorizedError(err)) {
         await redirectToLogin();
         return;
       }
-
-      setError(
-        `重置失败：${err instanceof Error && err.message ? err.message : '请稍后重试'}`
-      );
+      setError(`失败：${err instanceof Error && err.message ? err.message : '请稍后重试'}`);
       await loadAll();
     } finally {
       setApplying(false);
@@ -93,35 +77,41 @@ export function ResetPage() {
 
   return (
     <motion.div
-      className="page utility-page"
+      className="frontend-container"
       variants={pageVariants}
       initial="initial"
       animate="animate"
       exit="exit"
     >
       <motion.div
-        className="utility-page-stack"
         variants={staggerContainer}
         initial="initial"
         animate="animate"
+        style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}
       >
-        <motion.section variants={staggerItem} className="panel reset-hero">
-          <div className="reset-hero-head">
-            <div>
-              <span className="eyebrow">Quota Reset</span>
-              <h1 className="hero-title utility-title">额度重置</h1>
-              <p className="lead utility-lead">低于阈值时，可直接补到目标值。</p>
+        <motion.section variants={staggerItem} className="frontend-bento-hero">
+          <h1 className="frontend-bento-title">
+            <Icon name="grid" size={20} />
+            额度探测与重置 (Quota Reset)
+          </h1>
+          <p className="frontend-bento-desc">检测当前授权额度，支持在可用配额消耗至指定跌速线之下时，无感补充至目标水准。</p>
+          <div className="frontend-checkin-metrics">
+            <div className="frontend-metric-item">
+              <span className="frontend-metric-label">检测余额</span>
+              <span className="frontend-metric-value">{formatBalance(status?.current_balance)}</span>
             </div>
-            <div className={`reset-availability ${status?.can_apply ? 'ready' : 'locked'}`}>
-              <strong>{status?.can_apply ? '可立即重置' : '当前不可重置'}</strong>
-              <span>{status?.reason || '满足条件后可直接补到目标值'}</span>
+            <div className="frontend-metric-item">
+              <span className="frontend-metric-label">重置跌速线 (阈值)</span>
+              <span className="frontend-metric-value">{formatBalance(status?.threshold_balance)}</span>
             </div>
-          </div>
-          <div className="utility-chip-row">
-            <span className="chip">当前余额 {formatBalance(status?.current_balance)}</span>
-            <span className="chip">阈值 {formatBalance(status?.threshold_balance)}</span>
-            <span className="chip">目标值 {formatBalance(status?.target_balance)}</span>
-            <span className="chip">冷却 {status?.cooldown_days ?? '--'} 天</span>
+            <div className="frontend-metric-item">
+              <span className="frontend-metric-label">目标补满</span>
+              <span className="frontend-metric-value">{formatBalance(status?.target_balance)}</span>
+            </div>
+            <div className="frontend-metric-item">
+              <span className="frontend-metric-label">冷却周期</span>
+              <span className="frontend-metric-value">{status?.cooldown_days ?? '--'} 天</span>
+            </div>
           </div>
         </motion.section>
 
@@ -132,109 +122,110 @@ export function ResetPage() {
           </motion.div>
         )}
 
-        <motion.section variants={staggerItem} className="reset-grid">
-          <div className="panel reset-primary-card">
-            <div className="section-head">
-              <h2 className="section-title">立即执行</h2>
-            </div>
+        <motion.section variants={staggerItem} className="frontend-bento-grid">
+          <div className="frontend-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="frontend-bento-title" style={{ fontSize: '16px' }}>执行器控制面板</div>
+            
             {loading ? (
               <p className="loading-text">加载中...</p>
             ) : (
-              <>
-                <div className="reset-metric-stack">
-                  <div className="reset-metric-card">
-                    <span>当前余额</span>
-                    <strong>{formatBalance(status?.current_balance)}</strong>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flexGrow: 1 }}>
+                <div style={{ padding: '16px', background: 'var(--surface-0)', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: '600' }}>状态标定</span>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: status?.can_apply ? 'var(--teal)' : 'var(--rose)' }}>
+                      {status?.can_apply ? '条件吻合 (Ready)' : '锁闭防御 (Locked)'}
+                    </span>
                   </div>
-                  <div className="reset-metric-card">
-                    <span>目标值</span>
-                    <strong>{formatBalance(status?.target_balance)}</strong>
-                  </div>
-                  <div className="reset-metric-card accent">
-                    <span>本次预计补差</span>
-                    <strong>
-                      {status
-                        ? formatBalance(
-                            Math.max(0, status.target_balance - status.current_balance)
-                          )
-                        : '--'}
-                    </strong>
-                  </div>
-                </div>
-                <p className="reset-notice-text">
-                  {status?.notice || '当当前余额低于阈值时，可直接补到目标值。'}
-                </p>
-                {status?.next_available_at && !status.can_apply && (
-                  <p className="muted">
-                    下次可用时间：{formatAdminTime(status.next_available_at)}
+                  <p style={{ fontSize: '13px', color: 'var(--ink-0)', margin: 0, fontWeight: '500' }}>
+                    {status?.reason || '满足条件后可直接补到目标值。'}
                   </p>
-                )}
-                <button
-                  className="button primary wide"
-                  disabled={!status?.can_apply || applying}
-                  onClick={handleApply}
-                >
-                  {applying ? '重置中...' : '立即补到目标值'}
-                </button>
-              </>
+                  {status?.next_available_at && !status.can_apply && (
+                    <p style={{ fontSize: '12px', color: 'var(--ink-2)', margin: '8px 0 0' }}>
+                      时钟限制解除：{formatAdminTime(status.next_available_at)}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontWeight: '600' }}>本次预估落差</span>
+                  <strong style={{ fontSize: '18px', color: status?.can_apply ? 'var(--teal)' : 'var(--ink-0)', fontFamily: 'var(--font-mono)' }}>
+                    +{status ? formatBalance(Math.max(0, status.target_balance - status.current_balance)) : '--'}
+                  </strong>
+                </div>
+
+                <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
+                  <button
+                    className={`button ${status?.can_apply ? 'primary' : 'ghost'} wide`}
+                    disabled={!status?.can_apply || applying}
+                    onClick={handleApply}
+                    style={status?.can_apply ? { background: 'var(--ink-0)', borderColor: 'var(--ink-0)' } : {}}
+                  >
+                    {applying ? '申请执行中...' : '提交补差指令'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
-          <div className="panel reset-side-card">
-            <div className="section-head">
-              <h2 className="section-title">最近一次结果</h2>
-            </div>
+          <div className="frontend-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="frontend-bento-title" style={{ fontSize: '16px' }}>最近节点日志</div>
             {!status?.latest_record ? (
-              <div className="empty-state">还没有重置记录</div>
+               <div className="empty-state" style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>暂无重置动作回执</div>
             ) : (
-              <div className="reset-latest-card">
-                <div className="reset-latest-row">
-                  <span>执行时间</span>
-                  <strong>{formatAdminTime(status.latest_record.created_at)}</strong>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexGrow: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px dashed var(--panel-border)' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>时间戳</span>
+                  <strong style={{ fontSize: '13px', color: 'var(--ink-0)' }}>{formatAdminTime(status.latest_record.created_at)}</strong>
                 </div>
-                <div className="reset-latest-row">
-                  <span>执行状态</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px dashed var(--panel-border)' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>执行结论</span>
                   {renderGrantTag(status.latest_record.grant_status)}
                 </div>
-                <div className="reset-latest-row">
-                  <span>补差额度</span>
-                  <strong>+{formatBalance(status.latest_record.granted_balance)}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px dashed var(--panel-border)' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>填补幅度</span>
+                  <strong style={{ fontSize: '14px', color: 'var(--teal)', fontFamily: 'var(--font-mono)' }}>+{formatBalance(status.latest_record.granted_balance)}</strong>
                 </div>
-                <div className="reset-latest-row">
-                  <span>结果余额</span>
-                  <strong>{formatBalance(status.latest_record.new_balance)}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ink-2)' }}>平衡值更新</span>
+                  <strong style={{ fontSize: '14px', color: 'var(--ink-0)', fontFamily: 'var(--font-mono)' }}>{formatBalance(status.latest_record.new_balance)}</strong>
                 </div>
               </div>
             )}
           </div>
         </motion.section>
 
-        <motion.section variants={staggerItem} className="panel history-surface">
-          <div className="section-head">
-            <h2 className="section-title">重置记录</h2>
-          </div>
-          {history.length === 0 ? (
-            <div className="empty-state">暂无重置记录</div>
-          ) : (
-            <div className="list">
-              {history.map((item) => (
-                <div key={item.id} className="list-item history-item-card detailed reset-history-item">
-                  <div className="stack">
-                    <strong>{formatAdminTime(item.created_at)}</strong>
-                    <span className="muted">
-                      {formatBalance(item.before_balance)} → {formatBalance(item.target_balance)}
-                    </span>
-                    {item.grant_error && (
-                      <span className="muted reset-history-error">{item.grant_error}</span>
-                    )}
+        {history.length > 0 && (
+          <motion.section variants={staggerItem} className="frontend-bento-grid" style={{ gridTemplateColumns: '1fr' }}>
+            <div className="frontend-card" style={{ padding: '0', overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'var(--surface-0)' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold' }}>历史重置事件流</h3>
+              </div>
+              <div className="frontend-op-list" style={{ padding: '16px', gap: '8px' }}>
+                {history.map((item) => (
+                  <div key={item.id} className="frontend-op-item" style={{ padding: '12px 16px', background: 'var(--surface-0)', boxShadow: 'none' }}>
+                    <div className="frontend-op-main">
+                      <span className="frontend-op-title" style={{ fontSize: '14px' }}>{formatAdminTime(item.created_at)}</span>
+                      <span className="frontend-op-sub">
+                        {formatBalance(item.before_balance)} → {formatBalance(item.target_balance)}
+                        {item.grant_error && ` (阻断: ${item.grant_error})`}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      {renderGrantTag(item.grant_status)}
+                    </div>
+                    <div className="frontend-op-tail">
+                      <span style={{ fontWeight: '700', color: 'var(--ink-0)', fontFamily: 'var(--font-mono)', fontSize: '14px' }}>
+                        +{formatBalance(item.granted_balance)}
+                      </span>
+                    </div>
                   </div>
-                  {renderGrantTag(item.grant_status)}
-                  <span className="fortune-reward-text">+{formatBalance(item.granted_balance)}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          )}
-        </motion.section>
+          </motion.section>
+        )}
+
       </motion.div>
     </motion.div>
   );

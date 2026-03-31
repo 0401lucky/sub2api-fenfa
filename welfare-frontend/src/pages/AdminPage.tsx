@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import '../admin.css';
 import { Icon } from '../components/Icon';
 import { AdminBlindboxPanel } from '../components/AdminBlindboxPanel';
 import { AdminCheckinsPanel } from '../components/AdminCheckinsPanel';
@@ -494,94 +495,94 @@ export function AdminPage() {
 
   return (
     <motion.div 
-      className="page admin-dashboard-page"
+      className="admin-workspace"
       variants={pageVariants}
       initial="initial"
       animate="animate"
       exit="exit"
     >
-      <div className="admin-dashboard-shell">
-        <aside className="admin-dashboard-sidebar">
-          <div className="admin-brand">
-            <div className="admin-brand-mark">WF</div>
-            <div>
-              <span className="admin-sidebar-kicker">Welfare Station</span>
-              <h1>CONTROL <span className="text-gradient">ROOM</span></h1>
-              <p>把签到、兑换码与权限操作收进一个值守界面。</p>
+      <aside className="admin-sidebar-modern">
+        <div className="admin-sidebar-header">
+          <div className="admin-brand-logo">
+            <div className="admin-logo-mark">WF</div>
+            Control Room
+          </div>
+        </div>
+
+        <nav className="admin-nav-menu">
+          {sections.map((item) => (
+            <button
+              key={item.id}
+              className={`admin-nav-item-modern ${activeSection === item.id ? 'active' : ''}`}
+              onClick={() => setActiveSection(item.id)}
+            >
+              {activeSection === item.id && (
+                <motion.div
+                  layoutId="admin-nav-highlight"
+                  className="admin-nav-highlight"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <Icon name={item.icon} size={16} />
+              <span>{item.label}</span>
+              <span className="admin-nav-badge">
+                {item.id === 'checkins'
+                  ? stats?.total_checkins ?? 0
+                  : item.id === 'distributionDetection'
+                    ? riskOverview?.open_event_count ?? 0
+                  : item.id === 'resetRecords'
+                      ? settings?.reset_enabled ? 'ON' : 'OFF'
+                  : item.id === 'redeemCodes'
+                    ? overviewRedeemCodes.length
+                    : item.id === 'redeemClaims'
+                      ? urgentTotal
+                      : item.id === 'userCleanup'
+                        ? '🧹'
+                      : item.id === 'whitelist'
+                        ? whitelist.length
+                        : '•'}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="admin-sidebar-footer">
+          <div className="admin-user-profile">
+            {user.avatar_url ? (
+              <img className="admin-user-avatar" src={user.avatar_url} alt={user.username} />
+            ) : (
+              <div className="admin-card-icon"><Icon name="users" size={16} /></div>
+            )}
+            <div className="admin-user-info">
+              <span className="admin-user-name">{user.username}</span>
+              <span className="admin-user-role">ID: {user.sub2api_user_id}</span>
             </div>
           </div>
-
-          <nav className="admin-nav">
-            {sections.map((item) => (
-              <button
-                key={item.id}
-                className={`admin-nav-item ${activeSection === item.id ? 'active' : ''}`}
-                onClick={() => setActiveSection(item.id)}
-              >
-                <span className="admin-nav-icon">
-                  <Icon name={item.icon} size={16} />
-                </span>
-                <span className="admin-nav-copy">
-                  <strong>{item.label}</strong>
-                  <small>{item.description}</small>
-                </span>
-                <span className="admin-nav-count">
-                  {item.id === 'checkins'
-                    ? stats?.total_checkins ?? 0
-                    : item.id === 'distributionDetection'
-                      ? riskOverview?.open_event_count ?? 0
-                    : item.id === 'resetRecords'
-                        ? settings?.reset_enabled
-                          ? 'ON'
-                          : 'OFF'
-                    : item.id === 'redeemCodes'
-                      ? overviewRedeemCodes.length
-                      : item.id === 'redeemClaims'
-                        ? urgentTotal
-                        : item.id === 'userCleanup'
-                          ? '🧹'
-                        : item.id === 'whitelist'
-                          ? whitelist.length
-                          : '•'}
-                </span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="admin-sidebar-foot">
-            <div className="admin-sidebar-foot-card">
-              <span className="admin-sidebar-kicker">当前值守</span>
-              <div className="admin-identity" style={{ padding: 0, border: 'none', background: 'transparent', margin: '12px 0' }}>
-                {user.avatar_url && <img className="user-avatar user-avatar-sm" src={user.avatar_url} alt={user.username} />}
-                <div className="stack">
-                  <strong>{user.username}</strong>
-                  <span className="muted" style={{ fontSize: 12 }}>{user.email}</span>
-                  <span className="muted" style={{ fontSize: 12 }}>sub2api #{user.sub2api_user_id}</span>
-                </div>
-              </div>
-              <p style={{ fontSize: 12, marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 12 }}>
-                {settings?.checkin_enabled ? '🟢 签到运行中' : '🔴 签到已关闭'}<br />业务时区 {settings?.timezone ?? '-'}
-              </p>
-            </div>
-            <Link to="/checkin" className="button ghost admin-sidebar-link" style={{ marginTop: 8 }}>
-              ← 返回主站
-            </Link>
+          <Link to="/checkin" className="button ghost wide" style={{ height: '32px', fontSize: '13px', margin: 0 }}>
+            ← 返回主站
+          </Link>
+          <div className="admin-system-status">
+            <span className={`admin-status-dot ${settings?.checkin_enabled ? 'healthy' : 'error'}`} />
+            {settings?.checkin_enabled ? '系统正常运行' : '签到已关闭'} • {settings?.timezone ?? 'UTC'}
           </div>
-        </aside>
+        </div>
+      </aside>
 
-        <main className="admin-dashboard-main">
-          <header className="admin-dashboard-header">
-            <div>
-              <span className="admin-surface-kicker" style={{ color: 'var(--ink-2)' }}>Welfare Control Room</span>
-              <h2>{currentSection.title}</h2>
-              <p>{currentSection.description}</p>
-            </div>
-            <div className="admin-header-actions">
-              <button className="button" onClick={() => void loadOverview()}>
-                <Icon name="bolt" size={16} /> 刷新数据
-              </button>
-            </div>
-          </header>
+      <main className="admin-main-content">
+        <header className="admin-header-modern">
+          <div className="admin-header-title">
+            <h2>{currentSection.title}</h2>
+            <p>{currentSection.description}</p>
+          </div>
+          <div className="admin-header-actions">
+            <button className="button ghost" onClick={() => void loadOverview()}>
+              <Icon name="bolt" size={16} /> 刷新
+            </button>
+          </div>
+        </header>
+        
+        <div className="admin-page-body">
 
           {error && <p className="alert error admin-dashboard-alert">{error}</p>}
           {message && <p className="alert success admin-dashboard-alert">{message}</p>}
@@ -731,8 +732,8 @@ export function AdminPage() {
               onSuccess={setMessage}
             />
           )}
-        </main>
-      </div>
+        </div>
+      </main>
     </motion.div>
   );
 }

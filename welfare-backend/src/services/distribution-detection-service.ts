@@ -436,38 +436,19 @@ export class DistributionDetectionService {
 
   async getOverview(): Promise<RiskOverview> {
     await this.repository.syncExpiredEvents(nowIso());
-    const [counts, lastScan, observationCandidates] = await Promise.all([
+    await this.syncAllOpenRiskEventStatuses();
+    const [counts, lastScan, observationSummary] = await Promise.all([
       this.repository.getRiskEventCounts(),
       this.repository.getRiskScanState(),
-      this.listObservationCandidates()
+      this.getObservationSummary()
     ]);
-
-    const windows = createEmptyOverviewWindowCounts();
-    observationCandidates.forEach((item) => {
-      if (item.window1hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
-        windows.window1hObserveCount += 1;
-      }
-      if (item.window3hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
-        windows.window3hObserveCount += 1;
-      }
-      if (item.window6hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
-        windows.window6hObserveCount += 1;
-      }
-      if (item.window24hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
-        windows.window24hObserveCount += 1;
-      }
-    });
 
     return {
       activeEventCount: counts.active,
       pendingReleaseCount: counts.pending_release,
       openEventCount: counts.active + counts.pending_release,
-      observeCount1h: observationCandidates.filter(
-        (item) =>
-          item.window1hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD &&
-          item.window1hIpCount < DISTRIBUTION_BAN_IP_THRESHOLD
-      ).length,
-      windows,
+      observeCount1h: observationSummary.observeCount1h,
+      windows: observationSummary.windows,
       lastScan
     };
   }
@@ -478,9 +459,10 @@ export class DistributionDetectionService {
     status?: RiskEventStatus;
   }): Promise<{ items: RiskEvent[]; total: number }> {
     await this.repository.syncExpiredEvents(nowIso());
+    await this.syncAllOpenRiskEventStatuses();
     const result = await this.repository.listRiskEvents(params);
     return {
-      items: await this.syncRiskEventStatuses(result.items),
+      items: result.items,
       total: result.total
     };
   }
@@ -922,11 +904,6 @@ export class DistributionDetectionService {
 
     const observations: RiskObservation[] = [];
     for (const [userId, aggregate] of grouped) {
-      const user = await this.resolveObservationUser(userId, aggregate.user);
-      if (!user || this.isExemptUser(user, whitelist)) {
-        continue;
-      }
-
       const windowStats = this.computeObservationWindowStats(aggregate.entries);
       if (
         windowStats.window1hIpCount < DISTRIBUTION_OBSERVE_IP_THRESHOLD &&
@@ -934,6 +911,11 @@ export class DistributionDetectionService {
         windowStats.window6hIpCount < DISTRIBUTION_OBSERVE_IP_THRESHOLD &&
         windowStats.window24hIpCount < DISTRIBUTION_OBSERVE_IP_THRESHOLD
       ) {
+        continue;
+      }
+
+      const user = await this.resolveObservationUser(userId, aggregate.user);
+      if (!user || this.isExemptUser(user, whitelist)) {
         continue;
       }
 
@@ -955,6 +937,45 @@ export class DistributionDetectionService {
     }
 
     return observations;
+  }
+
+  private async getObservationSummary(): Promise<{
+    observeCount1h: number;
+    windows: RiskOverview['windows'];
+  }> {
+    try {
+      const observationCandidates = await this.listObservationCandidates();
+      const windows = createEmptyOverviewWindowCounts();
+      observationCandidates.forEach((item) => {
+        if (item.window1hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
+          windows.window1hObserveCount += 1;
+        }
+        if (item.window3hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
+          windows.window3hObserveCount += 1;
+        }
+        if (item.window6hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
+          windows.window6hObserveCount += 1;
+        }
+        if (item.window24hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD) {
+          windows.window24hObserveCount += 1;
+        }
+      });
+
+      return {
+        observeCount1h: observationCandidates.filter(
+          (item) =>
+            item.window1hIpCount >= DISTRIBUTION_OBSERVE_IP_THRESHOLD &&
+            item.window1hIpCount < DISTRIBUTION_BAN_IP_THRESHOLD
+        ).length,
+        windows
+      };
+    } catch (error) {
+      this.logger.warn?.('[risk] 观察名单统计失败，已降级为空结果', error);
+      return {
+        observeCount1h: 0,
+        windows: createEmptyOverviewWindowCounts()
+      };
+    }
   }
 
   private async resolveObservationUser(
@@ -1016,13 +1037,12 @@ export class DistributionDetectionService {
     };
   }
 
-  private async syncRiskEventStatuses(items: RiskEvent[]): Promise<RiskEvent[]> {
-    const synced: RiskEvent[] = [];
+  private async syncRiskEventStatuses(items: RiskEvent[]): Promise<number> {
+    let updatedCount = 0;
 
     for (const item of items) {
       const user = await this.sub2api.getAdminUserById(item.sub2apiUserId);
       if (!user) {
-        synced.push(item);
         continue;
       }
 
@@ -1041,19 +1061,26 @@ export class DistributionDetectionService {
         item.mainSiteSyncStatus === nextSyncStatus &&
         item.mainSiteSyncError === nextSyncError
       ) {
-        synced.push(item);
         continue;
       }
 
-      const updated = await this.repository.updateRiskEventSync(item.id, {
+      await this.repository.updateRiskEventSync(item.id, {
         sub2apiStatus: currentStatus,
         mainSiteSyncStatus: nextSyncStatus,
         mainSiteSyncError: nextSyncError
       });
-      synced.push(updated);
+      updatedCount += 1;
     }
 
-    return synced;
+    return updatedCount;
+  }
+
+  private async syncAllOpenRiskEventStatuses(): Promise<number> {
+    const items = await this.repository.listRiskEventsForStatuses(
+      ['active', 'pending_release'],
+      1000
+    );
+    return this.syncRiskEventStatuses(items);
   }
 
   private async isWelfareAdmin(

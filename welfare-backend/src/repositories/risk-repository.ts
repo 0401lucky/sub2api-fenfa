@@ -596,6 +596,26 @@ export class RiskRepository {
     };
   }
 
+  async listRiskEventsForStatuses(
+    statuses: RiskEventStatus[],
+    limit = 500
+  ): Promise<RiskEvent[]> {
+    if (statuses.length === 0) {
+      return [];
+    }
+
+    const result = await this.db.query(
+      `SELECT *
+       FROM welfare_risk_events
+       WHERE status = ANY($1::text[])
+       ORDER BY updated_at DESC, id DESC
+       LIMIT $2`,
+      [statuses, limit]
+    );
+
+    return result.rows.map((row) => this.mapRiskEvent(row));
+  }
+
   async getRiskOverview(): Promise<{
     activeEventCount: number;
     pendingReleaseCount: number;

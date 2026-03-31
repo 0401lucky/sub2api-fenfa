@@ -179,7 +179,7 @@ export function AdminPage() {
     }
   }
 
-  async function loadRiskOverviewSnapshot(options?: { silent?: boolean }) {
+  async function loadRiskOverviewSnapshot() {
     try {
       const overview = await api.getAdminRiskOverview();
       setRiskOverview(overview);
@@ -189,9 +189,7 @@ export function AdminPage() {
         return;
       }
 
-      if (!options?.silent) {
-        setError(err instanceof Error ? err.message : '风控总览加载失败');
-      }
+      setError(err instanceof Error ? err.message : '风控总览加载失败');
     }
   }
 
@@ -225,7 +223,7 @@ export function AdminPage() {
       setLoading(false);
     }
 
-    void loadRiskOverviewSnapshot({ silent: true });
+    void loadRiskOverviewSnapshot();
   }
 
   async function loadCheckins(filters: AdminCheckinQuery = checkinFilters) {

@@ -259,8 +259,16 @@ describe('DistributionDetectionService access guard', () => {
     const existingEvent = createRiskEvent();
     const repository = {
       syncExpiredEvents: vi.fn().mockResolvedValue(0),
+      listRiskEventsForStatuses: vi.fn().mockResolvedValue([existingEvent]),
       listRiskEvents: vi.fn().mockResolvedValue({
-        items: [existingEvent],
+        items: [
+          {
+            ...existingEvent,
+            sub2apiStatus: 'active',
+            mainSiteSyncStatus: 'failed',
+            mainSiteSyncError: '主站状态已与本地封禁事件不一致'
+          }
+        ],
         total: 1
       }),
       updateRiskEventSync: vi.fn().mockResolvedValue({
@@ -309,6 +317,10 @@ describe('DistributionDetectionService access guard', () => {
       mainSiteSyncStatus: 'failed',
       mainSiteSyncError: '主站状态已与本地封禁事件不一致'
     });
+    expect(repository.listRiskEventsForStatuses).toHaveBeenCalledWith(
+      ['active', 'pending_release'],
+      1000
+    );
     expect(result.items[0]).toMatchObject({
       sub2apiStatus: 'active',
       mainSiteSyncStatus: 'failed'

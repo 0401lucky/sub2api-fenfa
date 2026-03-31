@@ -783,49 +783,458 @@ h3 {
   grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 0.95fr) minmax(100px, 0.7fr) minmax(150px, 0.95fr) minmax(220px, 1.5fr) auto;
 }
 
-.admin-risk-overview-grid {
+.distribution-control-room {
+  gap: 22px;
+}
+
+.distribution-hero-panel {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.distribution-hero-shell {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.92fr);
+  gap: 22px;
+}
+
+.distribution-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'IBM Plex Mono', var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #4f6b95;
+}
+
+.distribution-hero-copy {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.admin-risk-overview-card {
+.distribution-hero-title {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 0.95;
+  color: #0f172a;
+}
+
+.distribution-hero-description {
+  max-width: 680px;
+  margin: 0;
+  color: #52627b;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.distribution-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.distribution-metric-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 30px -24px rgba(15, 23, 42, 0.38);
+}
+
+.distribution-metric-label {
+  font-family: 'IBM Plex Mono', var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.distribution-metric-value {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 4vw, 52px);
+  line-height: 0.95;
+  color: #111827;
+}
+
+.distribution-metric-card small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.distribution-hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.distribution-scan-card,
+.distribution-action-card,
+.distribution-filter-card {
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 30px -24px rgba(15, 23, 42, 0.3);
+}
+
+.distribution-scan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.distribution-scan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.distribution-scan-head strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 24px;
+  line-height: 1.05;
+  color: #0f172a;
+}
+
+.distribution-scan-chip {
+  background: rgba(226, 232, 240, 0.9);
+}
+
+.distribution-scan-list {
+  display: grid;
+  gap: 10px;
+}
+
+.distribution-scan-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  color: #5f6f86;
+  font-size: 13px;
+}
+
+.distribution-scan-row strong {
+  color: #1e293b;
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.distribution-scan-error {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px dashed rgba(148, 163, 184, 0.22);
+}
+
+.distribution-scan-error p {
+  margin: 8px 0 0;
+  color: #6b7280;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.distribution-action-card {
+  padding: 18px;
+}
+
+.distribution-action-row {
+  margin-top: 16px;
+}
+
+.distribution-events-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.9));
+}
+
+.distribution-events-head {
+  margin-bottom: 22px;
+  align-items: end;
+}
+
+.distribution-events-copy {
+  max-width: 620px;
+}
+
+.distribution-events-title {
+  margin: 8px 0 10px;
+  font-size: 32px;
+  line-height: 1;
+  color: #111827;
+}
+
+.distribution-events-copy p {
+  margin: 0;
+  color: #607087;
+  line-height: 1.7;
+}
+
+.distribution-filter-card {
+  min-width: min(100%, 260px);
+  padding: 16px;
+}
+
+.distribution-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.distribution-event-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+  box-shadow: 0 22px 35px -30px rgba(15, 23, 42, 0.36);
+}
+
+.distribution-event-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: linear-gradient(180deg, #38bdf8, #2563eb);
+  opacity: 0.82;
+}
+
+.distribution-event-head,
+.distribution-event-summary,
+.distribution-event-grid,
+.distribution-event-foot {
+  padding-left: 26px;
+  padding-right: 26px;
+}
+
+.distribution-event-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 24px;
+}
+
+.distribution-event-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.distribution-event-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #0f172a, #334155);
+  color: #f8fafc;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.distribution-event-copy {
+  min-width: 0;
+}
+
+.distribution-event-copy strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.05;
+  color: #111827;
+}
+
+.distribution-event-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.distribution-event-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  padding-bottom: 18px;
+}
+
+.distribution-event-summary p {
+  margin: 0;
+  color: #4f5f77;
+  line-height: 1.7;
+}
+
+.distribution-event-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.distribution-event-summary-meta span {
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: rgba(226, 232, 240, 0.56);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.distribution-event-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.1fr) minmax(260px, 0.92fr);
+  gap: 14px;
+  padding-bottom: 20px;
+}
+
+.distribution-event-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.distribution-event-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.distribution-event-block-head strong {
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.distribution-block-kicker {
+  font-family: 'IBM Plex Mono', var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.distribution-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.distribution-fact-grid div,
+.distribution-fact-row {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 18px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
 }
 
-.admin-risk-overview-card strong {
-  font-family: var(--font-display);
-  font-size: 18px;
+.distribution-fact-grid span,
+.distribution-fact-row span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.admin-risk-item {
-  grid-template-columns:
-    minmax(180px, 1.15fr)
-    minmax(140px, 0.95fr)
-    minmax(220px, 1.4fr)
-    minmax(180px, 1.1fr)
-    minmax(180px, 1fr)
-    auto;
+.distribution-fact-grid strong,
+.distribution-fact-row strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
-.admin-risk-evidence {
+.distribution-ip-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
-.admin-risk-chip {
-  padding-inline: 12px;
+.distribution-ip-pill {
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(226, 232, 240, 0.86), rgba(248, 250, 252, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #1e293b;
+  font-family: 'IBM Plex Mono', var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.admin-risk-actions {
+.distribution-fact-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.distribution-inline-note {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.86);
+}
+
+.distribution-inline-note p {
+  margin: 8px 0 0;
+  color: #475569;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.distribution-inline-note-danger {
+  background: rgba(255, 241, 242, 0.9);
+  border-color: rgba(244, 63, 94, 0.18);
+}
+
+.distribution-inline-note-danger p {
+  color: #be123c;
+}
+
+.distribution-event-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 18px;
+  padding-bottom: 24px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.distribution-event-foot-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.distribution-event-actions {
   justify-content: flex-end;
 }
 
@@ -3113,6 +3522,90 @@ h3 {
 .fortune-reward-text {
   color: #0f172a;
   font-weight: 800;
+}
+
+@media (max-width: 1100px) {
+  .distribution-hero-shell,
+  .distribution-event-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .distribution-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .distribution-metric-grid,
+  .distribution-fact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .distribution-events-head,
+  .distribution-event-head,
+  .distribution-event-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .distribution-event-badges,
+  .distribution-event-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .distribution-hero-panel,
+  .distribution-events-panel,
+  .distribution-event-card {
+    border-radius: 18px;
+  }
+
+  .distribution-event-head,
+  .distribution-event-summary,
+  .distribution-event-grid,
+  .distribution-event-foot {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .distribution-event-mark {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+    border-radius: 14px;
+    font-size: 15px;
+  }
+
+  .distribution-event-copy strong,
+  .distribution-events-title {
+    font-size: 24px;
+  }
+
+  .distribution-scan-head strong {
+    font-size: 20px;
+  }
+
+  .distribution-metric-value {
+    font-size: 34px;
+  }
+}
+
+@media (max-width: 520px) {
+  .distribution-event-identity {
+    align-items: flex-start;
+  }
+
+  .distribution-event-summary-meta,
+  .distribution-ip-cloud,
+  .distribution-event-foot-meta {
+    gap: 8px;
+  }
+
+  .distribution-ip-pill,
+  .distribution-event-summary-meta span {
+    width: 100%;
+  }
 }
 
 @media (max-width: 1100px) {

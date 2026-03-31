@@ -45,6 +45,39 @@ function renderSyncStatus(status: AdminRiskEvent['mainSiteSyncStatus']) {
   return <span className="status-tag pending">主站待同步</span>;
 }
 
+function describeScanStatus(status: AdminRiskOverview['last_scan']['last_status']) {
+  if (status === 'running') {
+    return '扫描中';
+  }
+
+  if (status === 'failed') {
+    return '最近失败';
+  }
+
+  if (status === 'success') {
+    return '最近成功';
+  }
+
+  return '尚未执行';
+}
+
+function describeEventStatus(status: AdminRiskEvent['status']) {
+  if (status === 'released') {
+    return '已解除封锁，保留处置档案。';
+  }
+
+  if (status === 'pending_release') {
+    return '最短锁定期已结束，等待管理员人工恢复。';
+  }
+
+  return '当前仍在锁定期内，福利站和主站都维持封禁。';
+}
+
+function buildIdentityMark(item: AdminRiskEvent): string {
+  const source = (item.sub2apiUsername || item.sub2apiEmail || String(item.sub2apiUserId)).trim();
+  return source.slice(0, 2).toUpperCase();
+}
+
 export function AdminDistributionDetectionPanel({
   overview,
   onOverviewChange,
@@ -102,10 +135,7 @@ export function AdminDistributionDetectionPanel({
     setScanning(true);
     try {
       const result = await api.scanAdminRiskEvents();
-      await Promise.all([
-        refreshOverview(),
-        loadEvents(filters)
-      ]);
+      await Promise.all([refreshOverview(), loadEvents(filters)]);
       onSuccess(
         `手动扫描完成：命中 ${result.matched_user_count} 人，新建 ${result.created_event_count} 条，刷新 ${result.refreshed_event_count} 条`
       );
@@ -134,10 +164,7 @@ export function AdminDistributionDetectionPanel({
       await api.releaseAdminRiskEvent(item.id, {
         reason: releaseReason.trim() || undefined
       });
-      await Promise.all([
-        refreshOverview(),
-        loadEvents(filters)
-      ]);
+      await Promise.all([refreshOverview(), loadEvents(filters)]);
       onSuccess(`已恢复用户 #${item.sub2apiUserId}`);
     } catch (err) {
       if (isUnauthorizedError(err)) {
@@ -152,101 +179,140 @@ export function AdminDistributionDetectionPanel({
   }
 
   return (
-    <div className="admin-section-stack">
-      <section className="panel">
-        <div className="section-head">
-          <h3 className="section-title">分发检测总览</h3>
-        </div>
+    <div className="admin-section-stack distribution-control-room">
+      <section className="panel distribution-hero-panel">
+        <div className="distribution-hero-shell">
+          <div className="distribution-hero-copy">
+            <span className="distribution-kicker">Distribution Sentinel</span>
+            <h3 className="distribution-hero-title">分发检测总览</h3>
+            <p className="distribution-hero-description">
+              用档案视角查看异常分发。这里优先展示锁定状态、主站同步结果和
+              IP 证据，方便你快速判断是否该继续封禁或人工恢复。
+            </p>
 
-        <div className="admin-stats-summary">
-          <span className="chip">封禁中：{overview?.active_event_count ?? 0}</span>
-          <span className="chip">待人工恢复：{overview?.pending_release_count ?? 0}</span>
-          <span className="chip">未结事件：{overview?.open_event_count ?? 0}</span>
-        </div>
-
-        <div className="admin-risk-overview-grid">
-          <div className="admin-risk-overview-card">
-            <strong>最近扫描</strong>
-            <span className="muted">
-              {overview?.last_scan.last_status === 'running'
-                ? '扫描中'
-                : overview?.last_scan.last_status === 'failed'
-                  ? '最近失败'
-                  : '最近成功'}
-            </span>
-            <small className="muted">
-              开始：{formatAdminDateTime(overview?.last_scan.last_started_at)}
-            </small>
-            <small className="muted">
-              结束：{formatAdminDateTime(overview?.last_scan.last_finished_at)}
-            </small>
+            <div className="distribution-metric-grid">
+              <article className="distribution-metric-card">
+                <span className="distribution-metric-label">封禁中</span>
+                <strong className="distribution-metric-value">
+                  {overview?.active_event_count ?? 0}
+                </strong>
+                <small>仍在最短锁定期内</small>
+              </article>
+              <article className="distribution-metric-card">
+                <span className="distribution-metric-label">待人工恢复</span>
+                <strong className="distribution-metric-value">
+                  {overview?.pending_release_count ?? 0}
+                </strong>
+                <small>24 小时后进入待处理</small>
+              </article>
+              <article className="distribution-metric-card">
+                <span className="distribution-metric-label">未结事件</span>
+                <strong className="distribution-metric-value">
+                  {overview?.open_event_count ?? 0}
+                </strong>
+                <small>后台与鉴权仍会继续拦截</small>
+              </article>
+            </div>
           </div>
 
-          <div className="admin-risk-overview-card">
-            <strong>扫描来源</strong>
-            <span className="muted">{overview?.last_scan.last_trigger_source || '未记录'}</span>
-            <small className="muted">
-              更新时间：{formatAdminDateTime(overview?.last_scan.updated_at)}
-            </small>
+          <div className="distribution-hero-side">
+            <article className="distribution-scan-card">
+              <div className="distribution-scan-head">
+                <div>
+                  <span className="distribution-kicker">Latest Sweep</span>
+                  <strong>{describeScanStatus(overview?.last_scan.last_status ?? 'idle')}</strong>
+                </div>
+                <span className="chip distribution-scan-chip">
+                  {overview?.last_scan.last_trigger_source || '未记录'}
+                </span>
+              </div>
+
+              <div className="distribution-scan-list">
+                <div className="distribution-scan-row">
+                  <span>开始</span>
+                  <strong>{formatAdminDateTime(overview?.last_scan.last_started_at)}</strong>
+                </div>
+                <div className="distribution-scan-row">
+                  <span>结束</span>
+                  <strong>{formatAdminDateTime(overview?.last_scan.last_finished_at)}</strong>
+                </div>
+                <div className="distribution-scan-row">
+                  <span>更新</span>
+                  <strong>{formatAdminDateTime(overview?.last_scan.updated_at)}</strong>
+                </div>
+              </div>
+
+              <div className="distribution-scan-error">
+                <span className="distribution-kicker">Last Error</span>
+                <p>{overview?.last_scan.last_error || '无'}</p>
+              </div>
+            </article>
+
+            <div className="distribution-action-card">
+              <label className="field">
+                <span>手动恢复备注</span>
+                <input
+                  type="text"
+                  value={releaseReason}
+                  onChange={(event) => setReleaseReason(event.target.value)}
+                  placeholder="可选，记录本次恢复原因"
+                />
+              </label>
+
+              <div className="form-actions actions distribution-action-row">
+                <button
+                  className="button primary"
+                  disabled={scanning}
+                  onClick={() => void handleManualScan()}
+                >
+                  {scanning ? '扫描中...' : '立即扫描'}
+                </button>
+                <button
+                  className="button ghost"
+                  onClick={() => void Promise.all([refreshOverview(), loadEvents(filters)])}
+                >
+                  刷新列表
+                </button>
+              </div>
+            </div>
           </div>
-
-          <div className="admin-risk-overview-card">
-            <strong>最近错误</strong>
-            <span className="muted admin-risk-error-text">
-              {overview?.last_scan.last_error || '无'}
-            </span>
-          </div>
-        </div>
-
-        <div className="form-grid" style={{ marginTop: 20 }}>
-          <label className="field field-span-2">
-            <span>手动恢复备注</span>
-            <input
-              type="text"
-              value={releaseReason}
-              onChange={(event) => setReleaseReason(event.target.value)}
-              placeholder="可选，记录本次恢复原因"
-            />
-          </label>
-        </div>
-
-        <div className="form-actions actions">
-          <button className="button primary" disabled={scanning} onClick={() => void handleManualScan()}>
-            {scanning ? '扫描中...' : '立即扫描'}
-          </button>
-          <button className="button ghost" onClick={() => void Promise.all([refreshOverview(), loadEvents(filters)])}>
-            刷新列表
-          </button>
         </div>
       </section>
 
-      <section className="panel">
-        <div className="section-head">
-          <h3 className="section-title">风险事件</h3>
-        </div>
+      <section className="panel distribution-events-panel">
+        <div className="admin-panel-head distribution-events-head">
+          <div className="distribution-events-copy">
+            <span className="distribution-kicker">Risk Ledger</span>
+            <h3 className="distribution-events-title">风险事件</h3>
+            <p>
+              每条事件都会拆开显示用户身份、命中窗口、IP 证据、主站联动结果和
+              人工恢复信息，避免关键信息挤在一排里。
+            </p>
+          </div>
 
-        <div className="form-grid">
-          <label className="field">
-            <span>事件状态</span>
-            <select
-              value={filters.status ?? ''}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  page: 1,
-                  status:
-                    event.target.value === ''
-                      ? undefined
-                      : (event.target.value as NonNullable<AdminRiskEventQuery['status']>)
-                }))
-              }
-            >
-              <option value="">全部</option>
-              <option value="active">封禁中</option>
-              <option value="pending_release">待人工恢复</option>
-              <option value="released">已恢复</option>
-            </select>
-          </label>
+          <div className="distribution-filter-card">
+            <label className="field">
+              <span>事件状态</span>
+              <select
+                value={filters.status ?? ''}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    page: 1,
+                    status:
+                      event.target.value === ''
+                        ? undefined
+                        : (event.target.value as NonNullable<AdminRiskEventQuery['status']>)
+                  }))
+                }
+              >
+                <option value="">全部</option>
+                <option value="active">封禁中</option>
+                <option value="pending_release">待人工恢复</option>
+                <option value="released">已恢复</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         {loading ? (
@@ -255,89 +321,137 @@ export function AdminDistributionDetectionPanel({
           <div className="empty-state">当前没有风险事件。</div>
         ) : (
           <>
-            <div className="list">
+            <div className="distribution-event-list">
               {list.items.map((item) => (
-                <article key={item.id} className="list-item admin-risk-item">
-                  <div className="stack">
-                    <strong>{item.sub2apiUsername || item.sub2apiEmail}</strong>
-                    <span className="muted admin-redeem-meta">{item.sub2apiEmail}</span>
-                    <span className="muted admin-redeem-meta">
-                      sub2api #{item.sub2apiUserId}
-                      {item.linuxdoSubject ? ` · ${item.linuxdoSubject}` : ''}
-                    </span>
-                  </div>
-
-                  <div className="stack">
-                    {renderRiskStatus(item.status)}
-                    <span className="muted admin-redeem-meta">
-                      最短锁定至 {formatAdminDateTime(item.minimumLockUntil)}
-                    </span>
-                    <span className="muted admin-redeem-meta">
-                      角色 {item.sub2apiRole} · 状态 {item.sub2apiStatus || '未知'}
-                    </span>
-                  </div>
-
-                  <div className="stack">
-                    <strong>{item.distinctIpCount} 个不同 IP</strong>
-                    <div className="admin-risk-evidence">
-                      {item.ipSamples.map((ip) => (
-                        <span key={ip} className="chip admin-risk-chip">
-                          {ip}
+                <article key={item.id} className="distribution-event-card">
+                  <header className="distribution-event-head">
+                    <div className="distribution-event-identity">
+                      <div className="distribution-event-mark">
+                        {buildIdentityMark(item)}
+                      </div>
+                      <div className="distribution-event-copy">
+                        <strong>{item.sub2apiUsername || item.sub2apiEmail}</strong>
+                        <span className="muted admin-redeem-meta">{item.sub2apiEmail}</span>
+                        <span className="muted admin-redeem-meta">
+                          sub2api #{item.sub2apiUserId}
+                          {item.linuxdoSubject ? ` · ${item.linuxdoSubject}` : ''}
                         </span>
-                      ))}
+                      </div>
                     </div>
-                    <span className="muted admin-redeem-meta">
-                      窗口 {formatAdminDateTime(item.windowStartedAt)} - {formatAdminDateTime(item.windowEndedAt)}
-                    </span>
+
+                    <div className="distribution-event-badges">
+                      {renderRiskStatus(item.status)}
+                      {renderSyncStatus(item.mainSiteSyncStatus)}
+                    </div>
+                  </header>
+
+                  <div className="distribution-event-summary">
+                    <p>{describeEventStatus(item.status)}</p>
+                    <div className="distribution-event-summary-meta">
+                      <span>角色 {item.sub2apiRole}</span>
+                      <span>主站状态 {item.sub2apiStatus || '未知'}</span>
+                      <span>扫描来源 {item.lastScanSource || '未记录'}</span>
+                    </div>
                   </div>
 
-                  <div className="stack">
-                    {renderSyncStatus(item.mainSiteSyncStatus)}
-                    <span className="muted admin-redeem-meta">
-                      首次命中 {formatAdminDateTime(item.firstHitAt)}
-                    </span>
-                    <span className="muted admin-redeem-meta">
-                      最近命中 {formatAdminDateTime(item.lastHitAt)}
-                    </span>
-                    {item.mainSiteSyncError && (
-                      <span className="admin-checkin-error failed">{item.mainSiteSyncError}</span>
-                    )}
+                  <div className="distribution-event-grid">
+                    <section className="distribution-event-block">
+                      <span className="distribution-block-kicker">命中窗口</span>
+                      <div className="distribution-fact-grid">
+                        <div>
+                          <span>首次命中</span>
+                          <strong>{formatAdminDateTime(item.firstHitAt)}</strong>
+                        </div>
+                        <div>
+                          <span>最近命中</span>
+                          <strong>{formatAdminDateTime(item.lastHitAt)}</strong>
+                        </div>
+                        <div>
+                          <span>窗口开始</span>
+                          <strong>{formatAdminDateTime(item.windowStartedAt)}</strong>
+                        </div>
+                        <div>
+                          <span>窗口结束</span>
+                          <strong>{formatAdminDateTime(item.windowEndedAt)}</strong>
+                        </div>
+                        <div>
+                          <span>最近扫描</span>
+                          <strong>{formatAdminDateTime(item.lastScannedAt)}</strong>
+                        </div>
+                        <div>
+                          <span>最短锁定至</span>
+                          <strong>{formatAdminDateTime(item.minimumLockUntil)}</strong>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="distribution-event-block distribution-event-evidence-block">
+                      <div className="distribution-event-block-head">
+                        <span className="distribution-block-kicker">IP 证据</span>
+                        <strong>{item.distinctIpCount} 个不同 IP</strong>
+                      </div>
+                      <div className="distribution-ip-cloud">
+                        {item.ipSamples.map((ip) => (
+                          <span key={ip} className="distribution-ip-pill">
+                            {ip}
+                          </span>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="distribution-event-block">
+                      <span className="distribution-block-kicker">联动与恢复</span>
+                      <div className="distribution-fact-stack">
+                        <div className="distribution-fact-row">
+                          <span>扫描状态</span>
+                          <strong>{item.lastScanStatus}</strong>
+                        </div>
+                        <div className="distribution-fact-row">
+                          <span>恢复时间</span>
+                          <strong>{formatAdminDateTime(item.releasedAt)}</strong>
+                        </div>
+                        <div className="distribution-fact-row">
+                          <span>恢复人</span>
+                          <strong>{item.releasedByUsername || item.releasedByEmail || '未恢复'}</strong>
+                        </div>
+                      </div>
+                      {item.releaseReason && (
+                        <div className="distribution-inline-note">
+                          <span className="distribution-block-kicker">恢复备注</span>
+                          <p>{item.releaseReason}</p>
+                        </div>
+                      )}
+                      {item.mainSiteSyncError && (
+                        <div className="distribution-inline-note distribution-inline-note-danger">
+                          <span className="distribution-block-kicker">主站同步错误</span>
+                          <p>{item.mainSiteSyncError}</p>
+                        </div>
+                      )}
+                    </section>
                   </div>
 
-                  <div className="stack">
-                    <span className="muted admin-redeem-meta">
-                      最近扫描 {formatAdminDateTime(item.lastScannedAt)}
-                    </span>
-                    <span className="muted admin-redeem-meta">
-                      来源 {item.lastScanSource || '未记录'} · 状态 {item.lastScanStatus}
-                    </span>
-                    {item.releasedAt && (
-                      <span className="muted admin-redeem-meta">
-                        已恢复 {formatAdminDateTime(item.releasedAt)}
-                      </span>
-                    )}
-                    {item.releaseReason && (
-                      <span className="muted admin-redeem-meta">
-                        备注 {item.releaseReason}
-                      </span>
-                    )}
-                  </div>
+                  <footer className="distribution-event-foot">
+                    <div className="distribution-event-foot-meta">
+                      <span>创建于 {formatAdminDateTime(item.createdAt)}</span>
+                      <span>更新于 {formatAdminDateTime(item.updatedAt)}</span>
+                    </div>
 
-                  <div className="actions admin-risk-actions">
-                    {item.status === 'pending_release' ? (
-                      <button
-                        className="button primary"
-                        disabled={releasingId === item.id}
-                        onClick={() => void handleRelease(item)}
-                      >
-                        {releasingId === item.id ? '恢复中...' : '手动恢复'}
-                      </button>
-                    ) : (
-                      <button className="button ghost" disabled>
-                        {item.status === 'active' ? '锁定中' : '已完成'}
-                      </button>
-                    )}
-                  </div>
+                    <div className="actions distribution-event-actions">
+                      {item.status === 'pending_release' ? (
+                        <button
+                          className="button primary"
+                          disabled={releasingId === item.id}
+                          onClick={() => void handleRelease(item)}
+                        >
+                          {releasingId === item.id ? '恢复中...' : '手动恢复'}
+                        </button>
+                      ) : (
+                        <button className="button ghost" disabled>
+                          {item.status === 'active' ? '锁定中' : '已完成'}
+                        </button>
+                      )}
+                    </div>
+                  </footer>
                 </article>
               ))}
             </div>

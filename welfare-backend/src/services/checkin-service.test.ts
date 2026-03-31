@@ -47,7 +47,8 @@ function createSub2apiMock() {
   return {
     addUserBalance: vi.fn(),
     findUserByEmail: vi.fn(),
-    getAdminUserById: vi.fn()
+    getAdminUserById: vi.fn(),
+    listAdminUserBalanceHistory: vi.fn()
   };
 }
 
@@ -136,6 +137,13 @@ describe('checkin service', () => {
       id: 42,
       email: 'linuxdo-user@linuxdo-connect.invalid',
       username: 'linuxdo-user'
+    });
+    sub2api.listAdminUserBalanceHistory.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 50,
+      pages: 1
     });
   });
 
@@ -291,6 +299,81 @@ describe('checkin service', () => {
       deleted: true,
       deleted_reason: '主站已无该邮箱用户，已自动移除这条补发记录',
       detail_message: null
+    });
+  });
+
+  it('补发遇到主站 409 且主站余额流水已存在时，会自动修正为成功', async () => {
+    const failedRecord = createNormalFailedRecord();
+    const pendingRecord: CheckinRecord = {
+      ...failedRecord,
+      grantStatus: 'pending',
+      grantError: ''
+    };
+    const successRecord: CheckinRecord = {
+      ...failedRecord,
+      grantStatus: 'success',
+      grantError: '',
+      sub2apiRequestId: 'recovered-history:11'
+    };
+    const { HttpError } = await import('../utils/http.js');
+
+    repository.getCheckinById
+      .mockResolvedValueOnce(failedRecord)
+      .mockResolvedValueOnce(successRecord);
+    repository.markCheckinPendingRetry.mockResolvedValue(pendingRecord);
+    repository.markCheckinSuccess.mockResolvedValue(undefined);
+    sub2api.addUserBalance.mockRejectedValue(
+      new HttpError(
+        409,
+        JSON.stringify({
+          code: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'idempotent request is still processing',
+          metadata: {
+            retry_after: '5'
+          }
+        }),
+        'sub2api 加余额失败: 409'
+      )
+    );
+    sub2api.listAdminUserBalanceHistory.mockResolvedValue({
+      items: [
+        {
+          id: 11,
+          code: 'admin-balance-11',
+          type: 'admin_balance',
+          value: failedRecord.rewardBalance,
+          status: 'used',
+          notes: `福利签到 ${failedRecord.checkinDate}`,
+          createdAt: failedRecord.createdAt,
+          usedBy: failedRecord.sub2apiUserId,
+          usedAt: failedRecord.createdAt
+        }
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+      pages: 1
+    });
+
+    const result = await service.retryFailedCheckin(failedRecord.id);
+
+    expect(sub2api.listAdminUserBalanceHistory).toHaveBeenCalledWith({
+      userId: failedRecord.sub2apiUserId,
+      page: 1,
+      pageSize: 50,
+      type: 'admin_balance'
+    });
+    expect(repository.markCheckinSuccess).toHaveBeenCalledWith(
+      failedRecord.id,
+      'recovered-history:11'
+    );
+    expect(repository.markCheckinFailed).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      item: successRecord,
+      new_balance: null,
+      deleted: false,
+      deleted_reason: null,
+      detail_message: '主站已确认这笔签到奖励到账，已自动修正本地状态'
     });
   });
 

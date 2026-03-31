@@ -272,12 +272,69 @@ function toAdminRiskObservationPayload(item: {
   };
 }
 
-function toAdminUpstreamFailureDetail(error: HttpError | Sub2apiResponseError): string {
-  if (error instanceof Sub2apiResponseError) {
-    return error.message.slice(0, 300);
+function extractUpstreamBodySummary(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return '';
   }
 
-  return `主站接口异常：HTTP ${error.status}`;
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const parts: string[] = [];
+    const code =
+      typeof parsed.code === 'string'
+        ? parsed.code.trim()
+        : typeof parsed.code === 'number'
+          ? String(parsed.code)
+          : '';
+    const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+    const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+    const detail = typeof parsed.detail === 'string' ? parsed.detail.trim() : '';
+
+    if (code && code !== '0' && code !== '200') {
+      parts.push(code);
+    }
+    if (message && !parts.includes(message)) {
+      parts.push(message);
+    }
+    if (reason && !parts.includes(reason)) {
+      parts.push(reason);
+    }
+    if (detail && !parts.includes(detail)) {
+      parts.push(detail);
+    }
+
+    if (
+      parsed.metadata &&
+      typeof parsed.metadata === 'object' &&
+      parsed.metadata !== null &&
+      'retry_after' in parsed.metadata
+    ) {
+      const retryAfter = parsed.metadata.retry_after;
+      if (
+        (typeof retryAfter === 'string' || typeof retryAfter === 'number') &&
+        String(retryAfter).trim() !== ''
+      ) {
+        parts.push(`retry_after=${String(retryAfter).trim()}s`);
+      }
+    }
+
+    return parts.join(' / ').slice(0, 300);
+  } catch {
+    return trimmed.slice(0, 300);
+  }
+}
+
+function toAdminUpstreamFailureDetail(error: HttpError | Sub2apiResponseError): string {
+  if (error instanceof Sub2apiResponseError) {
+    const summary = extractUpstreamBodySummary(error.body);
+    return summary ? `${error.message.slice(0, 200)} / ${summary}`.slice(0, 300) : error.message.slice(0, 300);
+  }
+
+  const summary = extractUpstreamBodySummary(error.body);
+  return summary
+    ? `主站接口异常：HTTP ${error.status} / ${summary}`.slice(0, 300)
+    : `主站接口异常：HTTP ${error.status}`;
 }
 
 function toAdminBlindboxItemPayload(item: {

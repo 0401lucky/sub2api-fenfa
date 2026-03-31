@@ -171,4 +171,62 @@ describe('sub2api client', () => {
     );
     expect(result).toEqual({ message: 'deleted' });
   });
+
+  it('可以读取管理员余额流水并解析 notes', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: 0,
+          message: 'ok',
+          data: {
+            items: [
+              {
+                id: 11,
+                code: 'admin-balance-11',
+                type: 'admin_balance',
+                value: 50.3,
+                status: 'used',
+                notes: '福利签到 2026-03-31',
+                created_at: '2026-03-31T05:08:00.000Z',
+                used_by: 3094,
+                used_at: '2026-03-31T05:08:00.000Z'
+              }
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+            pages: 1
+          }
+        }),
+        {
+          status: 200
+        }
+      )
+    );
+
+    const result = await client.listAdminUserBalanceHistory({
+      userId: 3094,
+      page: 1,
+      pageSize: 20,
+      type: 'admin_balance'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/api/v1/admin/users/3094/balance-history?page=1&page_size=20&type=admin_balance',
+      expect.objectContaining({
+        method: 'GET'
+      })
+    );
+    expect(result.items[0]).toEqual({
+      id: 11,
+      code: 'admin-balance-11',
+      type: 'admin_balance',
+      value: 50.3,
+      status: 'used',
+      notes: '福利签到 2026-03-31',
+      createdAt: '2026-03-31T05:08:00.000Z',
+      usedBy: 3094,
+      usedAt: '2026-03-31T05:08:00.000Z'
+    });
+  });
 });

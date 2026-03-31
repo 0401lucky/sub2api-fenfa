@@ -229,6 +229,32 @@ describe('adminRouter', () => {
     expect(response.body.message).toBe('SUB2API_GRANT_FAILED');
   });
 
+  it('POST /checkins/:id/retry 会透传主站 409 明细', async () => {
+    const { HttpError } = await import('../utils/http.js');
+    mockCheckinService.retryFailedCheckin.mockRejectedValue(
+      new HttpError(
+        409,
+        JSON.stringify({
+          code: 'IDEMPOTENCY_IN_PROGRESS',
+          message: 'idempotent request is still processing',
+          metadata: {
+            retry_after: '5'
+          }
+        }),
+        'sub2api failed'
+      )
+    );
+
+    const app = await createTestApp();
+    const response = await request(app).post('/api/admin/checkins/12/retry');
+
+    expect(response.status).toBe(502);
+    expect(response.body.detail).toContain('HTTP 409');
+    expect(response.body.detail).toContain('IDEMPOTENCY_IN_PROGRESS');
+    expect(response.body.detail).toContain('idempotent request is still processing');
+    expect(response.body.detail).toContain('retry_after=5s');
+  });
+
   it('POST /checkins/:id/retry 会返回自动删除结果', async () => {
     mockCheckinService.retryFailedCheckin.mockResolvedValue({
       item: null,

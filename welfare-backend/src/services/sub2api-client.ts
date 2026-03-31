@@ -42,6 +42,18 @@ export interface AdminUsageLog {
 
 export type AdminUsageLogRecord = AdminUsageLog;
 
+export interface AdminBalanceHistoryItem {
+  id: number;
+  code: string;
+  type: string;
+  value: number;
+  status: string;
+  notes: string;
+  createdAt: string;
+  usedBy: number | null;
+  usedAt: string | null;
+}
+
 interface CurrentUserProfile {
   id: number;
   email: string;
@@ -148,6 +160,38 @@ export class Sub2apiClient {
     } catch {
       throw new Sub2apiResponseError(`${context}：sub2api 返回了无法解析的响应`, body);
     }
+  }
+
+  private parseAdminBalanceHistoryItem(input: unknown): AdminBalanceHistoryItem {
+    if (!input || typeof input !== 'object') {
+      throw new Sub2apiResponseError('sub2api 余额流水格式非法');
+    }
+
+    const record = input as Record<string, unknown>;
+    return {
+      id: Number(record.id),
+      code: String(record.code ?? ''),
+      type: String(record.type ?? ''),
+      value:
+        typeof record.value === 'number'
+          ? record.value
+          : typeof record.value === 'string'
+            ? Number(record.value)
+            : 0,
+      status: String(record.status ?? ''),
+      notes: String(record.notes ?? ''),
+      createdAt: String(record.created_at ?? ''),
+      usedBy:
+        typeof record.used_by === 'number'
+          ? record.used_by
+          : typeof record.used_by === 'string' && record.used_by.trim() !== ''
+            ? Number(record.used_by)
+            : null,
+      usedAt:
+        typeof record.used_at === 'string' && record.used_at.trim() !== ''
+          ? record.used_at
+          : null
+    };
   }
 
   private async withRetries<T>(
@@ -402,6 +446,70 @@ export class Sub2apiClient {
       return {
         newBalance: envelope.data?.balance,
         requestId
+      };
+    });
+  }
+
+  async listAdminUserBalanceHistory(params: {
+    userId: number;
+    page?: number;
+    pageSize?: number;
+    type?: string;
+  }): Promise<{
+    items: AdminBalanceHistoryItem[];
+    total: number;
+    page: number;
+    pageSize: number;
+    pages: number;
+  }> {
+    return this.withRetries(`查询用户 #${params.userId} 余额流水`, async () => {
+      const query = new URLSearchParams({
+        page: String(params.page ?? 1),
+        page_size: String(params.pageSize ?? USER_PAGE_SIZE)
+      });
+      if (params.type?.trim()) {
+        query.set('type', params.type.trim());
+      }
+
+      const response = await fetchWithTimeout(
+        `${config.SUB2API_BASE_URL}/api/v1/admin/users/${params.userId}/balance-history?${query.toString()}`,
+        {
+          method: 'GET',
+          headers: this.baseHeaders
+        },
+        config.SUB2API_TIMEOUT_MS
+      );
+      const body = await response.text();
+      if (!response.ok) {
+        throw new HttpError(
+          response.status,
+          body,
+          `查询 sub2api 余额流水失败: ${response.status}`
+        );
+      }
+
+      const envelope = this.parseEnvelope<PaginatedItems<unknown>>(body, '查询 sub2api 余额流水失败');
+      if (envelope.code !== 0 || !envelope.data) {
+        throw new Sub2apiResponseError(
+          `查询 sub2api 余额流水失败：${envelope.message || 'unknown error'}`,
+          body
+        );
+      }
+
+      const items = Array.isArray(envelope.data.items) ? envelope.data.items : [];
+      const page = Number(envelope.data.page ?? params.page ?? 1);
+      const pageSize = Number(envelope.data.page_size ?? params.pageSize ?? USER_PAGE_SIZE);
+      const total = Number(envelope.data.total ?? items.length);
+      const pages = Number(
+        envelope.data.pages ?? Math.max(1, Math.ceil(total / Math.max(1, pageSize)))
+      );
+
+      return {
+        items: items.map((item) => this.parseAdminBalanceHistoryItem(item)),
+        total,
+        page,
+        pageSize,
+        pages
       };
     });
   }

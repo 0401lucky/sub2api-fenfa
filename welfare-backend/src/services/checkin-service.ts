@@ -21,6 +21,9 @@ export class ForbiddenError extends Error {}
 export class NotFoundError extends Error {}
 
 const PENDING_RECOVERY_AFTER_MS = Math.max(30_000, config.SUB2API_TIMEOUT_MS * 2);
+const BALANCE_HISTORY_PAGE_SIZE = 50;
+const BALANCE_HISTORY_MAX_PAGES = 3;
+const CHECKIN_HISTORY_MATCH_SKEW_MS = 5 * 60 * 1000;
 
 function buildIdempotencyKey(
   sub2apiUserId: number,
@@ -56,7 +59,10 @@ type WelfareRepositoryLike = Pick<
 
 type Sub2apiClientLike = Pick<
   Sub2apiClient,
-  'addUserBalance' | 'findUserByEmail' | 'getAdminUserById'
+  | 'addUserBalance'
+  | 'findUserByEmail'
+  | 'getAdminUserById'
+  | 'listAdminUserBalanceHistory'
 >;
 
 type CheckinGrantResult =
@@ -91,6 +97,22 @@ function buildGrantNotes(record: Pick<CheckinRecord, 'checkinMode' | 'blindboxTi
   }
 
   return `福利签到 ${record.checkinDate}`;
+}
+
+function mergeDetailMessages(...messages: Array<string | null | undefined>): string | null {
+  const normalized = messages
+    .map((item) => item?.trim())
+    .filter((item): item is string => Boolean(item));
+
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  return normalized.join('；');
+}
+
+function isSameBalance(left: number, right: number): boolean {
+  return Math.abs(left - right) < 0.000001;
 }
 
 function isPendingRecoverable(record: CheckinRecord): boolean {
@@ -336,7 +358,8 @@ export class CheckinService {
     );
 
     const grantResult = await this.grantCheckin(pending, {
-      allowMissingUserDeletion: true
+      allowMissingUserDeletion: true,
+      allowConflictHistoryRecovery: true
     });
     if (grantResult.deleted) {
       return {
@@ -366,6 +389,7 @@ export class CheckinService {
     record: CheckinRecord,
     options: {
       allowMissingUserDeletion?: boolean;
+      allowConflictHistoryRecovery?: boolean;
     } = {}
   ): Promise<CheckinGrantResult> {
     const recipient = await this.resolveRecipientUserId(
@@ -397,6 +421,16 @@ export class CheckinService {
         idempotencyKey: record.idempotencyKey
       });
     } catch (error) {
+      const recovered = await this.recoverCheckinConflictFromHistory(
+        record,
+        recipient,
+        error,
+        options.allowConflictHistoryRecovery ?? false
+      );
+      if (recovered) {
+        return recovered;
+      }
+
       const message = error instanceof Error ? error.message : 'unknown error';
       try {
         await this.repository.markCheckinFailed(record.id, message.slice(0, 500));
@@ -413,6 +447,96 @@ export class CheckinService {
       requestId: grantResult.requestId,
       detailMessage: recipient.detailMessage
     };
+  }
+
+  private async recoverCheckinConflictFromHistory(
+    record: CheckinRecord,
+    recipient: Extract<CheckinRecipientResolution, { deleted: false }>,
+    error: unknown,
+    allowConflictHistoryRecovery: boolean
+  ): Promise<CheckinGrantResult | null> {
+    if (!allowConflictHistoryRecovery) {
+      return null;
+    }
+
+    if (!(error instanceof HttpError) || error.status !== 409) {
+      return null;
+    }
+
+    try {
+      const matched = await this.findRecoveredCheckinHistoryItem(record, recipient.userId);
+      if (!matched) {
+        return null;
+      }
+
+      const recoveredRequestId = `recovered-history:${matched.id}`;
+      await this.repository.markCheckinSuccess(record.id, recoveredRequestId);
+      return {
+        deleted: false,
+        newBalance: null,
+        requestId: recoveredRequestId,
+        detailMessage: mergeDetailMessages(
+          recipient.detailMessage,
+          '主站已确认这笔签到奖励到账，已自动修正本地状态'
+        )
+      };
+    } catch (historyError) {
+      console.warn('[checkin] 409 后查询主站余额流水失败', historyError);
+      return null;
+    }
+  }
+
+  private async findRecoveredCheckinHistoryItem(
+    record: CheckinRecord,
+    userId: number
+  ) {
+    const expectedNotes = buildGrantNotes(record);
+    const recordCreatedAtMs = Date.parse(record.createdAt);
+    const lowerBoundMs = Number.isNaN(recordCreatedAtMs)
+      ? Number.NEGATIVE_INFINITY
+      : recordCreatedAtMs - CHECKIN_HISTORY_MATCH_SKEW_MS;
+
+    for (let page = 1; page <= BALANCE_HISTORY_MAX_PAGES; page += 1) {
+      const response = await this.sub2api.listAdminUserBalanceHistory({
+        userId,
+        page,
+        pageSize: BALANCE_HISTORY_PAGE_SIZE,
+        type: 'admin_balance'
+      });
+
+      for (const item of response.items) {
+        const createdAtMs = Date.parse(item.createdAt);
+        if (
+          item.type === 'admin_balance' &&
+          item.notes.trim() === expectedNotes &&
+          isSameBalance(item.value, record.rewardBalance) &&
+          (Number.isNaN(createdAtMs) || createdAtMs >= lowerBoundMs)
+        ) {
+          return item;
+        }
+      }
+
+      const oldestCreatedAtMs = response.items.reduce<number | null>((oldest, item) => {
+        const current = Date.parse(item.createdAt);
+        if (Number.isNaN(current)) {
+          return oldest;
+        }
+        if (oldest == null) {
+          return current;
+        }
+        return Math.min(oldest, current);
+      }, null);
+
+      if (
+        page >= response.pages ||
+        response.items.length === 0 ||
+        (oldestCreatedAtMs != null && oldestCreatedAtMs < lowerBoundMs)
+      ) {
+        break;
+      }
+    }
+
+    return null;
   }
 
   private async resolveRecipientUserId(

@@ -7,8 +7,8 @@ COPY scripts ./scripts
 COPY welfare-backend/package*.json ./welfare-backend/
 COPY welfare-frontend/package*.json ./welfare-frontend/
 
-RUN cd welfare-backend && npm ci
-RUN cd welfare-frontend && npm ci
+RUN cd welfare-backend && npm ci --include=dev
+RUN cd welfare-frontend && npm ci --include=dev
 
 COPY welfare-backend ./welfare-backend
 COPY welfare-frontend ./welfare-frontend
@@ -22,7 +22,7 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /build/welfare-frontend
 
 COPY welfare-frontend/package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY welfare-frontend ./
 RUN npm run build
@@ -32,7 +32,7 @@ FROM node:20-alpine AS backend-builder
 WORKDIR /build/welfare-backend
 
 COPY welfare-backend/package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY welfare-backend ./
 RUN npm run build

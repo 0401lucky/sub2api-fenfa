@@ -353,6 +353,7 @@ export interface AdminMonitoringIpList {
   page_size: number;
   pages: number;
   generated_at: string;
+  search?: string;
 }
 
 export interface AdminMonitoringIpUserItem {

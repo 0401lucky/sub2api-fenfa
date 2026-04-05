@@ -216,6 +216,11 @@ interface MonitoringLiveCacheValue {
   expiresAtMs: number;
 }
 
+interface MonitoringAggregateCacheValue {
+  index: MonitoringAggregateIndex;
+  expiresAtMs: number;
+}
+
 interface CloudflareRuleSnapshot extends CloudflareIpAccessRule {
   source: 'managed' | 'external';
 }
@@ -654,6 +659,8 @@ export function buildMonitoringAggregateIndex(_input: {
 export class MonitoringService {
   private liveCache: MonitoringLiveCacheValue | null = null;
   private liveCachePromise: Promise<MonitoringLiveCacheValue> | null = null;
+  private aggregateCache: MonitoringAggregateCacheValue | null = null;
+  private aggregateCachePromise: Promise<MonitoringAggregateIndex> | null = null;
 
   constructor(
     private readonly repository: MonitoringRepository,
@@ -726,12 +733,17 @@ export class MonitoringService {
   async listIps(params: {
     page: number;
     pageSize: number;
+    search?: string;
   }): Promise<{ items: MonitoringIpItem[]; total: number; generatedAt: string }> {
     const aggregate = await this.getAggregateIndex();
+    const normalizedSearch = normalizeIp(params.search);
+    const matchedIps = normalizedSearch
+      ? aggregate.ips.filter((item) => item.ipAddress.includes(normalizedSearch))
+      : aggregate.ips;
     const offset = (params.page - 1) * params.pageSize;
     return {
-      items: aggregate.ips.slice(offset, offset + params.pageSize),
-      total: aggregate.ips.length,
+      items: matchedIps.slice(offset, offset + params.pageSize),
+      total: matchedIps.length,
       generatedAt: aggregate.generatedAt
     };
   }
@@ -1047,6 +1059,7 @@ export class MonitoringService {
         refreshed_event_count: input.refreshedEventCount
       }
     });
+    this.invalidateCache();
   }
 
   async recordRiskReleaseAction(
@@ -1467,18 +1480,42 @@ export class MonitoringService {
   private invalidateCache() {
     this.liveCache = null;
     this.liveCachePromise = null;
+    this.aggregateCache = null;
+    this.aggregateCachePromise = null;
   }
 
   private async getAggregateIndex(forceRefresh = false): Promise<MonitoringAggregateIndex> {
+    const nowMs = Date.now();
+    if (!forceRefresh && this.aggregateCache && this.aggregateCache.expiresAtMs > nowMs) {
+      return this.aggregateCache.index;
+    }
+
+    if (!forceRefresh && this.aggregateCachePromise) {
+      return this.aggregateCachePromise;
+    }
+
+    const task = this.loadAggregateIndex(nowMs, forceRefresh).finally(() => {
+      if (this.aggregateCachePromise === task) {
+        this.aggregateCachePromise = null;
+      }
+    });
+    this.aggregateCachePromise = task;
+    return task;
+  }
+
+  private async loadAggregateIndex(
+    nowMs: number,
+    forceRefresh: boolean
+  ): Promise<MonitoringAggregateIndex> {
     const [liveUsage, openRiskEvents, protectedUsers] = await Promise.all([
       this.getLiveUsage(forceRefresh),
       this.riskRepository.listRiskEventsForStatuses(['active', 'pending_release'], 1000),
       this.getProtectedState()
     ]);
 
-    return buildMonitoringAggregateIndex({
+    const index = buildMonitoringAggregateIndex({
       entries: liveUsage.entries,
-      nowMs: Date.now(),
+      nowMs,
       observeIpThreshold: config.WELFARE_MONITOR_OBSERVE_IP_THRESHOLD,
       blockIpThreshold: config.WELFARE_MONITOR_BLOCK_IP_THRESHOLD,
       openRiskEvents: openRiskEvents
@@ -1492,6 +1529,13 @@ export class MonitoringService {
         })),
       protectedUsers
     });
+
+    this.aggregateCache = {
+      index,
+      expiresAtMs: liveUsage.expiresAtMs
+    };
+
+    return index;
   }
 
   private async getLiveUsage(forceRefresh = false): Promise<MonitoringLiveCacheValue> {

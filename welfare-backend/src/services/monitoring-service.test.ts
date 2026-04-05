@@ -77,7 +77,166 @@ describe('buildMonitoringAggregateIndex', () => {
   });
 });
 
+describe('MonitoringService aggregate cache', () => {
+  it('会复用同一批监控聚合并支持按 IP 关键字过滤', async () => {
+    const { MonitoringService } = await import('./monitoring-service.js');
+
+    const listRiskEventsForStatuses = vi.fn().mockResolvedValue([]);
+    const listAdminUsageLogs = vi.fn().mockResolvedValue({
+      items: [
+        {
+          userId: 7,
+          createdAt: '2026-04-05T09:55:00.000Z',
+          ipAddress: '152.53.88.113',
+          user: {
+            id: 7,
+            email: 'u7@example.com',
+            username: 'u7',
+            role: 'user',
+            status: 'active'
+          }
+        },
+        {
+          userId: 8,
+          createdAt: '2026-04-05T09:56:00.000Z',
+          ipAddress: '38.14.250.69',
+          user: {
+            id: 8,
+            email: 'u8@example.com',
+            username: 'u8',
+            role: 'user',
+            status: 'active'
+          }
+        }
+      ],
+      pages: 1
+    });
+    const listAdminWhitelist = vi.fn().mockResolvedValue([]);
+
+    const service = new MonitoringService(
+      {
+        listActions: vi.fn(),
+        listSnapshots: vi.fn(),
+        createAction: vi.fn(),
+        saveSnapshot: vi.fn(),
+        purgeSnapshotsOlderThan: vi.fn()
+      } as never,
+      {
+        listRiskEventsForStatuses
+      } as never,
+      {
+        bumpSessionVersion: vi.fn()
+      } as never,
+      {
+        listAdminUsageLogs,
+        getAdminUserById: vi.fn(),
+        updateAdminUserStatus: vi.fn()
+      } as never,
+      {
+        listAdminWhitelist
+      } as never,
+      {
+        getOverview: vi.fn()
+      } as never,
+      {
+        isConfigured: vi.fn().mockReturnValue(false),
+        getDisabledReason: vi.fn().mockReturnValue(''),
+        listIpAccessRules: vi.fn()
+      } as never,
+      console
+    );
+
+    const filtered = await service.listIps({
+      page: 1,
+      pageSize: 10,
+      search: '152.53'
+    });
+    const detail = await service.getIpUsers('152.53.88.113');
+
+    expect(filtered.items.map((item) => item.ipAddress)).toEqual(['152.53.88.113']);
+    expect(detail.ip.ipAddress).toBe('152.53.88.113');
+    expect(listAdminUsageLogs).toHaveBeenCalledTimes(1);
+    expect(listRiskEventsForStatuses).toHaveBeenCalledTimes(1);
+    expect(listAdminWhitelist).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('MonitoringService Cloudflare', () => {
+  it('支持按 IP 关键字过滤共享 IP 榜', async () => {
+    const { MonitoringService } = await import('./monitoring-service.js');
+
+    const service = new MonitoringService(
+      {
+        listActions: vi.fn(),
+        listSnapshots: vi.fn(),
+        createAction: vi.fn(),
+        saveSnapshot: vi.fn(),
+        purgeSnapshotsOlderThan: vi.fn()
+      } as never,
+      {
+        listRiskEventsForStatuses: vi.fn().mockResolvedValue([])
+      } as never,
+      {
+        bumpSessionVersion: vi.fn()
+      } as never,
+      {
+        listAdminUsageLogs: vi
+          .fn()
+          .mockResolvedValueOnce({
+            items: [
+              {
+                userId: 7,
+                createdAt: '2026-04-05T09:55:00.000Z',
+                ipAddress: '152.53.88.113',
+                user: {
+                  id: 7,
+                  email: 'u7@example.com',
+                  username: 'u7',
+                  role: 'user',
+                  status: 'active'
+                }
+              },
+              {
+                userId: 8,
+                createdAt: '2026-04-05T09:56:00.000Z',
+                ipAddress: '38.14.250.69',
+                user: {
+                  id: 8,
+                  email: 'u8@example.com',
+                  username: 'u8',
+                  role: 'user',
+                  status: 'active'
+                }
+              }
+            ],
+            pages: 1
+          }),
+        getAdminUserById: vi.fn(),
+        updateAdminUserStatus: vi.fn()
+      } as never,
+      {
+        listAdminWhitelist: vi.fn().mockResolvedValue([])
+      } as never,
+      {
+        getOverview: vi.fn()
+      } as never,
+      {
+        isConfigured: vi.fn().mockReturnValue(false),
+        getDisabledReason: vi.fn().mockReturnValue('未配置 Cloudflare')
+      } as never,
+      console
+    );
+
+    const result = await service.listIps({
+      page: 1,
+      pageSize: 10,
+      search: '152.53'
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]?.ipAddress).toBe('152.53.88.113');
+  });
+
   it('检测到外部 Cloudflare 规则时禁止面板覆盖', async () => {
     const { MonitoringService } = await import('./monitoring-service.js');
 
@@ -146,5 +305,120 @@ describe('MonitoringService Cloudflare', () => {
     expect(result.canManage).toBe(false);
     expect(result.rule?.source).toBe('external');
     expect(result.disabledReason).toContain('非福利站托管');
+  });
+
+  it('在缓存窗口内复用聚合结果，并在风险扫描后失效缓存', async () => {
+    const { MonitoringService } = await import('./monitoring-service.js');
+
+    const repository = {
+      listActions: vi.fn().mockResolvedValue({
+        items: [],
+        total: 0
+      }),
+      listSnapshots: vi.fn().mockResolvedValue([]),
+      createAction: vi.fn().mockResolvedValue(undefined),
+      saveSnapshot: vi.fn(),
+      purgeSnapshotsOlderThan: vi.fn()
+    };
+    const riskRepository = {
+      listRiskEventsForStatuses: vi.fn().mockResolvedValue([]),
+      getBlockingEventByUserId: vi.fn()
+    };
+    const welfare = {
+      listAdminWhitelist: vi.fn().mockResolvedValue([])
+    };
+    const sub2api = {
+      listAdminUsageLogs: vi.fn().mockResolvedValue({
+        items: [
+          {
+            userId: 7,
+            createdAt: '2026-04-05T09:55:00.000Z',
+            ipAddress: '152.53.88.113',
+            user: {
+              id: 7,
+              email: 'u7@example.com',
+              username: 'u7',
+              role: 'user',
+              status: 'active'
+            }
+          },
+          {
+            userId: 8,
+            createdAt: '2026-04-05T09:57:00.000Z',
+            ipAddress: '8.8.8.8',
+            user: {
+              id: 8,
+              email: 'u8@example.com',
+              username: 'u8',
+              role: 'user',
+              status: 'active'
+            }
+          }
+        ],
+        total: 2,
+        page: 1,
+        pageSize: 200,
+        pages: 1
+      }),
+      getAdminUserById: vi.fn(),
+      updateAdminUserStatus: vi.fn()
+    };
+
+    const service = new MonitoringService(
+      repository as never,
+      riskRepository as never,
+      {
+        bumpSessionVersion: vi.fn()
+      } as never,
+      sub2api as never,
+      welfare as never,
+      {
+        getOverview: vi.fn()
+      } as never,
+      {
+        isConfigured: vi.fn().mockReturnValue(false),
+        getDisabledReason: vi.fn().mockReturnValue(''),
+        listIpAccessRules: vi.fn()
+      } as never,
+      console
+    );
+
+    const firstPage = await service.listIps({
+      page: 1,
+      pageSize: 10,
+      search: '152.53'
+    });
+    const usersPage = await service.listUsers({
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.items[0]?.ipAddress).toBe('152.53.88.113');
+    expect(usersPage.total).toBe(2);
+    expect(sub2api.listAdminUsageLogs).toHaveBeenCalledTimes(1);
+    expect(riskRepository.listRiskEventsForStatuses).toHaveBeenCalledTimes(1);
+    expect(welfare.listAdminWhitelist).toHaveBeenCalledTimes(1);
+
+    await service.recordRiskScanAction(
+      {
+        sub2apiUserId: 1,
+        email: 'admin@example.com',
+        username: 'admin'
+      },
+      {
+        matchedUserCount: 1,
+        createdEventCount: 1,
+        refreshedEventCount: 0,
+        status: 'success',
+        detail: 'manual risk scan'
+      }
+    );
+    await service.listIps({
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(sub2api.listAdminUsageLogs).toHaveBeenCalledTimes(2);
   });
 });

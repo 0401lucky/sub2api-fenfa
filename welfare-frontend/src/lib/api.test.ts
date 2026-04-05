@@ -76,4 +76,33 @@ describe('api request', () => {
       'https://sub2api.example.com/admin-login?redirect=%2Fadmin'
     );
   });
+
+  it('查询监控 IP 榜时会附带 search 参数', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        code: 0,
+        message: 'success',
+        data: {
+          items: [],
+          total: 0,
+          page: 1,
+          page_size: 6,
+          pages: 1,
+          generated_at: '2026-04-05T22:28:00.000Z'
+        }
+      })
+    });
+
+    const { api } = await import('./api');
+    await api.listAdminMonitoringIps({
+      page: 1,
+      page_size: 6,
+      search: '152.53'
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/admin/monitoring/ips?page=1&page_size=6&search=152.53');
+  });
 });

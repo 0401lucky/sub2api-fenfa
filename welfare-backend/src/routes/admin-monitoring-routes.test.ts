@@ -134,6 +134,25 @@ describe('adminMonitoringRouter', () => {
     expect(response.body.data.summary.request_count_24h).toBe(120);
   });
 
+  it('GET /ips 支持按 IP 关键字搜索', async () => {
+    mockMonitoringService.listIps.mockResolvedValue({
+      items: [],
+      total: 0,
+      generatedAt: '2026-04-05T08:00:00.000Z'
+    });
+
+    const app = await createTestApp();
+    const response = await request(app).get('/api/admin/monitoring/ips?page=2&page_size=5&search=152.53');
+
+    expect(response.status).toBe(200);
+    expect(mockMonitoringService.listIps).toHaveBeenCalledWith({
+      page: 2,
+      pageSize: 5,
+      search: '152.53'
+    });
+    expect(response.body.data.search).toBe('152.53');
+  });
+
   it('POST /users/:id/disable 在服务冲突时返回 409', async () => {
     const { MonitoringConflictError } = await import('../services/monitoring-service.js');
     mockMonitoringService.disableUser.mockRejectedValue(

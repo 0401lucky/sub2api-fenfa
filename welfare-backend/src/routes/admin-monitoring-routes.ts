@@ -257,6 +257,10 @@ const pagingSchema = z.object({
   page_size: z.coerce.number().int().positive().max(200).optional()
 });
 
+const monitoringIpQuerySchema = pagingSchema.extend({
+  search: z.string().trim().max(200).optional()
+});
+
 const monitoringActionQuerySchema = pagingSchema.extend({
   action_type: z
     .enum([
@@ -289,7 +293,7 @@ adminMonitoringRouter.get('/overview', asyncHandler(async (_req, res) => {
 }));
 
 adminMonitoringRouter.get('/ips', asyncHandler(async (req, res) => {
-  const parsed = pagingSchema.safeParse(req.query);
+  const parsed = monitoringIpQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     fail(res, 400, 'BAD_REQUEST', '查询参数非法');
     return;
@@ -297,14 +301,16 @@ adminMonitoringRouter.get('/ips', asyncHandler(async (req, res) => {
 
   const page = parsed.data.page ?? 1;
   const pageSize = parsed.data.page_size ?? 12;
-  const result = await monitoringService.listIps({ page, pageSize });
+  const search = parsed.data.search?.trim() ?? '';
+  const result = await monitoringService.listIps({ page, pageSize, search });
   ok(res, {
     items: result.items.map((item) => toMonitoringIpPayload(item)),
     total: result.total,
     page,
     page_size: pageSize,
     pages: Math.max(1, Math.ceil(result.total / pageSize)),
-    generated_at: result.generatedAt
+    generated_at: result.generatedAt,
+    search
   });
 }));
 

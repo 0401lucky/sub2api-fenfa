@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { formatAdminDateTime } from '../lib/admin-format';
 import { api, isUnauthorizedError } from '../lib/api';
@@ -34,7 +34,8 @@ interface AdminMonitoringConsoleProps {
 
 const defaultIpFilters = {
   page: 1,
-  page_size: 6
+  page_size: 6,
+  search: ''
 };
 
 const defaultUserFilters = {
@@ -394,6 +395,7 @@ export function AdminMonitoringConsole({
   const [overview, setOverview] = useState<AdminMonitoringOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [ipFilters, setIpFilters] = useState(defaultIpFilters);
+  const [ipSearchInput, setIpSearchInput] = useState('');
   const [ipList, setIpList] = useState<AdminMonitoringIpList | null>(null);
   const [ipLoading, setIpLoading] = useState(true);
   const [selectedIp, setSelectedIp] = useState<string | null>(null);
@@ -424,6 +426,8 @@ export function AdminMonitoringConsole({
   const [busyIpAction, setBusyIpAction] = useState<'challenge' | 'block' | 'clear' | null>(null);
   const [releasingId, setReleasingId] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
+  const ipUsersRequestIdRef = useRef(0);
+  const ipCloudflareRequestIdRef = useRef(0);
 
   async function handleRequestError(error: unknown, fallbackMessage: string) {
     if (isUnauthorizedError(error)) {
@@ -446,36 +450,58 @@ export function AdminMonitoringConsole({
     }
   }
 
+  function resetIpDetailState() {
+    ipUsersRequestIdRef.current += 1;
+    ipCloudflareRequestIdRef.current += 1;
+    setIpUsers(null);
+    setIpCloudflareStatus(null);
+    setIpUsersLoading(false);
+    setIpCloudflareLoading(false);
+  }
+
   async function loadIpUsers(ipAddress: string) {
+    const requestId = ipUsersRequestIdRef.current + 1;
+    ipUsersRequestIdRef.current = requestId;
     setIpUsersLoading(true);
-    setIpCloudflareLoading(true);
+    setIpUsers((current) => (current?.ip.ip_address === ipAddress ? current : null));
     try {
-      const [usersResult, cloudflareResult] = await Promise.allSettled([
-        api.getAdminMonitoringIpUsers(ipAddress),
-        api.getAdminMonitoringIpCloudflareStatus(ipAddress)
-      ]);
-
-      if (usersResult.status === 'fulfilled') {
-        setSelectedIp(usersResult.value.ip.ip_address);
-        setIpUsers(usersResult.value);
-      } else {
-        setIpUsers(null);
-        await handleRequestError(usersResult.reason, 'IP 关联用户加载失败');
+      const result = await api.getAdminMonitoringIpUsers(ipAddress);
+      if (ipUsersRequestIdRef.current !== requestId) {
+        return;
       }
-
-      if (cloudflareResult.status === 'fulfilled') {
-        setIpCloudflareStatus(cloudflareResult.value);
-      } else {
-        setIpCloudflareStatus(null);
-        await handleRequestError(cloudflareResult.reason, 'Cloudflare IP 状态加载失败');
-      }
+      setIpUsers(result);
     } catch (error) {
-      setIpUsers(null);
-      setIpCloudflareStatus(null);
-      await handleRequestError(error, 'IP 关联用户加载失败');
+      if (ipUsersRequestIdRef.current === requestId) {
+        setIpUsers(null);
+        await handleRequestError(error, 'IP 关联用户加载失败');
+      }
     } finally {
-      setIpUsersLoading(false);
-      setIpCloudflareLoading(false);
+      if (ipUsersRequestIdRef.current === requestId) {
+        setIpUsersLoading(false);
+      }
+    }
+  }
+
+  async function loadIpCloudflareStatus(ipAddress: string) {
+    const requestId = ipCloudflareRequestIdRef.current + 1;
+    ipCloudflareRequestIdRef.current = requestId;
+    setIpCloudflareLoading(true);
+    setIpCloudflareStatus((current) => (current?.ip_address === ipAddress ? current : null));
+    try {
+      const result = await api.getAdminMonitoringIpCloudflareStatus(ipAddress);
+      if (ipCloudflareRequestIdRef.current !== requestId) {
+        return;
+      }
+      setIpCloudflareStatus(result);
+    } catch (error) {
+      if (ipCloudflareRequestIdRef.current === requestId) {
+        setIpCloudflareStatus(null);
+        await handleRequestError(error, 'Cloudflare IP 状态加载失败');
+      }
+    } finally {
+      if (ipCloudflareRequestIdRef.current === requestId) {
+        setIpCloudflareLoading(false);
+      }
     }
   }
 
@@ -492,20 +518,34 @@ export function AdminMonitoringConsole({
 
       if (!nextIp) {
         setSelectedIp(null);
-        setIpUsers(null);
-        setIpCloudflareStatus(null);
+        resetIpDetailState();
         return;
       }
 
       setSelectedIp(nextIp);
       if (nextIp === selectedIp) {
         void loadIpUsers(nextIp);
+        void loadIpCloudflareStatus(nextIp);
       }
     } catch (error) {
       await handleRequestError(error, 'IP 榜单加载失败');
     } finally {
       setIpLoading(false);
     }
+  }
+
+  function applyIpSearch(search: string) {
+    const normalized = search.trim();
+    setIpFilters((current) => ({
+      ...current,
+      page: 1,
+      search: normalized
+    }));
+  }
+
+  function clearIpSearch() {
+    setIpSearchInput('');
+    applyIpSearch('');
   }
 
   async function loadUserIps(userId: number) {
@@ -633,10 +673,12 @@ export function AdminMonitoringConsole({
 
   useEffect(() => {
     if (!selectedIp) {
+      resetIpDetailState();
       return;
     }
 
     void loadIpUsers(selectedIp);
+    void loadIpCloudflareStatus(selectedIp);
   }, [selectedIp]);
 
   useEffect(() => {
@@ -658,6 +700,8 @@ export function AdminMonitoringConsole({
   const trendPoints = useMemo(() => {
     return overview?.snapshot_points.slice(-12) ?? [];
   }, [overview]);
+
+  const activeIpSearch = ipFilters.search.trim();
 
   const maxRequestCount = useMemo(() => {
     return Math.max(...trendPoints.map((item) => item.request_count_24h), 1);
@@ -1045,14 +1089,57 @@ export function AdminMonitoringConsole({
               <h3 className="monitoring-panel-title">共享 IP 榜</h3>
               <p>优先定位在 1h 内同时承载多个用户的 IP，再下钻到该 IP 的用户明细。</p>
             </div>
+            <div className="monitoring-toolbar-cluster">
+              <label className="field monitoring-filter-field monitoring-search-field">
+                <span>搜索 IP</span>
+                <input
+                  type="text"
+                  placeholder="支持完整 IP 或片段"
+                  value={ipSearchInput}
+                  onChange={(event) => setIpSearchInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      applyIpSearch(ipSearchInput);
+                    }
+                  }}
+                />
+              </label>
+              <div className="actions">
+                <button
+                  className="button ghost"
+                  type="button"
+                  onClick={() => applyIpSearch(ipSearchInput)}
+                >
+                  搜索
+                </button>
+                <button
+                  className="button ghost"
+                  type="button"
+                  disabled={!ipSearchInput.trim() && activeIpSearch === ''}
+                  onClick={clearIpSearch}
+                >
+                  清空
+                </button>
+              </div>
+            </div>
           </div>
 
           {ipLoading && !ipList ? (
             <p className="loading-text">正在加载 IP 榜单...</p>
           ) : !ipList || ipList.items.length === 0 ? (
-            <div className="empty-state">过去 24 小时还没有可展示的 IP 数据。</div>
+            <div className="empty-state">
+              {activeIpSearch
+                ? `没有匹配 “${activeIpSearch}” 的共享 IP。`
+                : '过去 24 小时还没有可展示的 IP 数据。'}
+            </div>
           ) : (
             <>
+              {activeIpSearch ? (
+                <p className="monitoring-search-summary">
+                  当前搜索：<strong>{activeIpSearch}</strong>，命中 {ipList.total} 条
+                </p>
+              ) : null}
               <div className="monitoring-rank-list">
                 {ipList.items.map((item) => {
                   const risk = describeRiskLevel(item.risk_level);

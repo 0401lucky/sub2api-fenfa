@@ -881,6 +881,23 @@
   min-width: 180px;
 }
 
+.monitoring-toolbar-cluster {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.monitoring-search-field {
+  min-width: 240px;
+}
+
+.monitoring-search-summary {
+  margin: 0 0 14px;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .monitoring-ip-cloud {
   display: flex;
   flex-wrap: wrap;
@@ -957,6 +974,15 @@
   .monitoring-risk-statuses,
   .monitoring-ledger-side {
     justify-content: flex-start;
+  }
+
+  .monitoring-toolbar-cluster {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .monitoring-search-field {
+    min-width: 100%;
   }
 }
 

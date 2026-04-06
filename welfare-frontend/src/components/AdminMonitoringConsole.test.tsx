@@ -21,10 +21,9 @@ const { mockApi, mockIsUnauthorizedError } = vi.hoisted(() => ({
   mockApi: {
     getAdminMonitoringOverview: vi.fn(),
     listAdminMonitoringIps: vi.fn(),
-    getAdminMonitoringIpUsers: vi.fn(),
-    getAdminMonitoringIpCloudflareStatus: vi.fn(),
+    getAdminMonitoringIpDetail: vi.fn(),
     listAdminMonitoringUsers: vi.fn(),
-    getAdminMonitoringUserIps: vi.fn(),
+    getAdminMonitoringUserDetail: vi.fn(),
     listAdminMonitoringActions: vi.fn(),
     getAdminMonitoringRiskOverview: vi.fn(),
     listAdminMonitoringRiskObservations: vi.fn(),
@@ -56,7 +55,9 @@ function buildOverview() {
       snapshot_interval_ms: 3_600_000
     },
     summary: {
+      raw_request_count_24h: 9320,
       request_count_24h: 9128,
+      excluded_request_count_24h: 192,
       active_user_count_24h: 1,
       unique_ip_count_24h: 93,
       observe_user_count_1h: 0,
@@ -65,12 +66,27 @@ function buildOverview() {
       shared_ip_count_1h: 4,
       shared_ip_count_24h: 9
     },
+    excluded_breakdown: {
+      invalid_created_at: 0,
+      missing_user_id: 12,
+      missing_ip_address: 180,
+      outside_window: 0
+    },
     windows: {
       observe_user_count_1h: 0,
       observe_user_count_24h: 0,
       shared_user_count_24h: 1,
       shared_ip_count_1h: 4,
       shared_ip_count_24h: 9
+    },
+    usage_sync: {
+      last_started_at: '2026-04-05T22:20:00.000Z',
+      last_finished_at: '2026-04-05T22:22:00.000Z',
+      last_status: 'success' as const,
+      last_error: '',
+      fetched_page_count: 2,
+      upserted_count: 9320,
+      updated_at: '2026-04-05T22:22:00.000Z'
     },
     last_scan: {
       last_started_at: null,
@@ -117,13 +133,18 @@ function buildIpList(search = '') {
     items: [
       {
         ip_address: '152.53.88.113',
+        request_count_10m: 80,
         request_count_1h: 519,
         request_count_24h: 1975,
+        user_count_10m: 2,
         user_count_1h: 1,
         user_count_24h: 1,
         first_seen_at: '2026-04-05T21:00:00.000Z',
         last_seen_at: '2026-04-05T22:15:00.000Z',
         risk_level: 'normal' as const,
+        risk_score: 10,
+        risk_band: 'normal' as const,
+        rule_hits: [],
         sample_users: []
       }
     ],
@@ -136,7 +157,7 @@ function buildIpList(search = '') {
   };
 }
 
-function buildIpUsers() {
+function buildIpDetail() {
   return {
     ip: buildIpList().items[0],
     items: [
@@ -154,11 +175,23 @@ function buildIpUsers() {
         request_count_24h: 1975,
         unique_ip_count_1h: 1,
         unique_ip_count_24h: 1,
+        risk_score: 10,
+        risk_band: 'normal' as const,
+        rule_hits: [],
         first_seen_at: '2026-04-05T21:00:00.000Z',
         last_seen_at: '2026-04-05T22:15:00.000Z'
       }
     ],
     total: 1,
+    cloudflare: {
+      ip_address: '152.53.88.113',
+      enabled: false,
+      can_manage: false,
+      disabled_reason: '未配置 Cloudflare',
+      matched_rule_count: 0,
+      rule: null
+    },
+    recent_actions: [],
     generated_at: '2026-04-05T22:28:00.000Z'
   };
 }
@@ -194,16 +227,35 @@ describe('AdminMonitoringConsole', () => {
     mockApi.listAdminMonitoringIps.mockImplementation(async (params?: { search?: string }) =>
       buildIpList(params?.search?.trim() ?? '')
     );
-    mockApi.getAdminMonitoringIpUsers.mockResolvedValue(buildIpUsers());
-    mockApi.getAdminMonitoringIpCloudflareStatus.mockResolvedValue({
-      ip_address: '152.53.88.113',
-      enabled: false,
-      can_manage: false,
-      disabled_reason: '未配置 Cloudflare',
-      matched_rule_count: 0,
-      rule: null
-    });
+    mockApi.getAdminMonitoringIpDetail.mockResolvedValue(buildIpDetail());
     mockApi.listAdminMonitoringUsers.mockResolvedValue(buildUserList());
+    mockApi.getAdminMonitoringUserDetail.mockResolvedValue({
+      user: {
+        sub2api_user_id: 7,
+        sub2api_email: 'selected-user@example.com',
+        sub2api_username: 'selected-user',
+        linuxdo_subject: null,
+        sub2api_role: 'user',
+        sub2api_status: 'active',
+        is_admin_protected: false,
+        risk_status: null,
+        risk_event_id: null,
+        request_count_1h: 519,
+        request_count_24h: 1975,
+        unique_ip_count_1h: 1,
+        unique_ip_count_24h: 1,
+        risk_score: 10,
+        risk_band: 'normal',
+        rule_hits: [],
+        first_seen_at: '2026-04-05T21:00:00.000Z',
+        last_seen_at: '2026-04-05T22:15:00.000Z'
+      },
+      items: [],
+      total: 0,
+      open_risk_event: null,
+      recent_actions: [],
+      generated_at: '2026-04-05T22:28:00.000Z'
+    });
     mockApi.listAdminMonitoringActions.mockResolvedValue({
       items: [],
       total: 0,
@@ -242,32 +294,24 @@ describe('AdminMonitoringConsole', () => {
     await waitFor(() =>
       expect(mockApi.listAdminMonitoringIps).toHaveBeenLastCalledWith({
         page: 1,
-        page_size: 6,
+        page_size: 8,
         search: '152.53'
       })
     );
   });
 
   it('Cloudflare 状态较慢时会先显示 IP 用户明细', async () => {
-    const deferredCloudflare = createDeferred<Awaited<ReturnType<typeof mockApi.getAdminMonitoringIpCloudflareStatus>>>();
-    mockApi.getAdminMonitoringIpCloudflareStatus.mockReturnValue(deferredCloudflare.promise);
+    const deferredDetail = createDeferred<Awaited<ReturnType<typeof mockApi.getAdminMonitoringIpDetail>>>();
+    mockApi.getAdminMonitoringIpDetail.mockReturnValue(deferredDetail.promise);
 
     renderConsole();
 
+    await screen.findByText('152.53.88.113');
+    fireEvent.click(screen.getAllByText('152.53.88.113')[0]!);
+    expect(screen.getByText('正在加载详情...')).toBeInTheDocument();
+
+    deferredDetail.resolve(buildIpDetail());
+
     expect(await screen.findByText('selected-user')).toBeInTheDocument();
-    expect(screen.getByText('正在读取 Cloudflare 规则状态...')).toBeInTheDocument();
-
-    deferredCloudflare.resolve({
-      ip_address: '152.53.88.113',
-      enabled: false,
-      can_manage: false,
-      disabled_reason: '未配置 Cloudflare',
-      matched_rule_count: 0,
-      rule: null
-    });
-
-    await waitFor(() =>
-      expect(screen.queryByText('正在读取 Cloudflare 规则状态...')).not.toBeInTheDocument()
-    );
   });
 });

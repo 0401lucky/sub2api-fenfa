@@ -96,7 +96,9 @@ describe('adminMonitoringRouter', () => {
         snapshotIntervalMs: 3_600_000
       },
       summary: {
+        rawRequestCount24h: 150,
         requestCount24h: 120,
+        excludedCount24h: 30,
         activeUserCount24h: 20,
         uniqueIpCount24h: 16,
         observeUserCount1h: 3,
@@ -105,12 +107,27 @@ describe('adminMonitoringRouter', () => {
         sharedIpCount1h: 4,
         sharedIpCount24h: 7
       },
+      excludedBreakdown: {
+        invalidCreatedAt: 1,
+        missingUserId: 2,
+        missingIpAddress: 27,
+        outsideWindow: 0
+      },
       windows: {
         observeUserCount1h: 3,
         observeUserCount24h: 5,
         sharedUserCount24h: 9,
         sharedIpCount1h: 4,
         sharedIpCount24h: 7
+      },
+      usageSyncState: {
+        lastStartedAt: '2026-04-05T07:58:00.000Z',
+        lastFinishedAt: '2026-04-05T07:59:00.000Z',
+        lastStatus: 'success',
+        lastError: '',
+        fetchedPageCount: 2,
+        upsertedCount: 150,
+        updatedAt: '2026-04-05T07:59:00.000Z'
       },
       lastScan: {
         lastStartedAt: null,

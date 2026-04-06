@@ -1,7 +1,9 @@
 import type { Pool, PoolClient } from 'pg';
 import type {
   RiskEvent,
+  RiskBand,
   RiskEventStatus,
+  RiskRuleHit,
   RiskScanState,
   RiskSyncStatus
 } from '../types/domain.js';
@@ -18,6 +20,9 @@ export interface SaveRiskEventInput {
   windowEndedAt: string;
   distinctIpCount: number;
   ipSamples: string[];
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   firstHitAt: string;
   lastHitAt: string;
   minimumLockUntil: string;
@@ -67,6 +72,52 @@ function toStringArray(value: unknown): string[] {
 
 function toNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+function toRiskBand(value: unknown): RiskBand {
+  return value === 'observe' || value === 'block' ? value : 'normal';
+}
+
+function toRuleHits(value: unknown): RiskRuleHit[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+        const record = item as Record<string, unknown>;
+        const level =
+          record.level === 'warn' || record.level === 'high' ? record.level : 'info';
+        const window =
+          record.window === '10m' ||
+          record.window === '1h' ||
+          record.window === '3h' ||
+          record.window === '6h' ||
+          record.window === '24h'
+            ? record.window
+            : '24h';
+        return {
+          code: String(record.code ?? ''),
+          label: String(record.label ?? ''),
+          level,
+          window,
+          actual: Number(record.actual ?? 0),
+          threshold: Number(record.threshold ?? 0),
+          score: Number(record.score ?? 0)
+        } satisfies RiskRuleHit;
+      })
+      .filter((item): item is RiskRuleHit => Boolean(item && item.code && item.label));
+  }
+
+  if (typeof value === 'string') {
+    try {
+      return toRuleHits(JSON.parse(value) as unknown);
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
 }
 
 export class RiskRepository {
@@ -187,14 +238,17 @@ export class RiskRepository {
              window_ended_at = $9,
              distinct_ip_count = $10,
              ip_samples = $11::jsonb,
-             last_hit_at = $12,
-             minimum_lock_until = $13,
-             main_site_sync_status = $14,
-             main_site_sync_error = $15,
-             last_scan_status = $16,
-             last_scan_error = $17,
-             last_scan_source = $18,
-             last_scanned_at = $19,
+             risk_score = $12,
+             risk_band = $13,
+             rule_hits = $14::jsonb,
+             last_hit_at = $15,
+             minimum_lock_until = $16,
+             main_site_sync_status = $17,
+             main_site_sync_error = $18,
+             last_scan_status = $19,
+             last_scan_error = $20,
+             last_scan_source = $21,
+             last_scanned_at = $22,
              released_by_sub2api_user_id = NULL,
              released_by_email = '',
              released_by_username = '',
@@ -215,6 +269,9 @@ export class RiskRepository {
           input.windowEndedAt,
           input.distinctIpCount,
           JSON.stringify(input.ipSamples),
+          input.riskScore,
+          input.riskBand,
+          JSON.stringify(input.ruleHits),
           input.lastHitAt,
           input.minimumLockUntil,
           input.mainSiteSyncStatus,
@@ -245,6 +302,9 @@ export class RiskRepository {
          window_ended_at,
          distinct_ip_count,
          ip_samples,
+         risk_score,
+         risk_band,
+         rule_hits,
          first_hit_at,
          last_hit_at,
          minimum_lock_until,
@@ -256,8 +316,8 @@ export class RiskRepository {
          last_scanned_at
        )
        VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14,
-         $15, $16, $17, $18, $19, $20
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14::jsonb,
+         $15, $16, $17, $18, $19, $20, $21, $22, $23
        )
        RETURNING *`,
       [
@@ -272,6 +332,9 @@ export class RiskRepository {
         input.windowEndedAt,
         input.distinctIpCount,
         JSON.stringify(input.ipSamples),
+        input.riskScore,
+        input.riskBand,
+        JSON.stringify(input.ruleHits),
         input.firstHitAt,
         input.lastHitAt,
         input.minimumLockUntil,
@@ -314,6 +377,9 @@ export class RiskRepository {
          window_ended_at,
          distinct_ip_count,
          ip_samples,
+         risk_score,
+         risk_band,
+         rule_hits,
          first_hit_at,
          last_hit_at,
          minimum_lock_until,
@@ -325,8 +391,8 @@ export class RiskRepository {
          last_scanned_at
        )
        VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14,
-         $15, $16, $17, $18, $19, $20
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14::jsonb,
+         $15, $16, $17, $18, $19, $20, $21, $22, $23
        )
        RETURNING *`,
       [
@@ -341,6 +407,9 @@ export class RiskRepository {
         input.windowEndedAt,
         input.distinctIpCount,
         JSON.stringify(input.ipSamples),
+        input.riskScore,
+        input.riskBand,
+        JSON.stringify(input.ruleHits),
         input.firstHitAt,
         input.lastHitAt,
         input.minimumLockUntil,
@@ -372,15 +441,18 @@ export class RiskRepository {
            window_ended_at = $9,
            distinct_ip_count = $10,
            ip_samples = $11::jsonb,
-           first_hit_at = $12,
-           last_hit_at = $13,
-           minimum_lock_until = $14,
-           main_site_sync_status = $15,
-           main_site_sync_error = $16,
-           last_scan_status = $17,
-           last_scan_error = $18,
-           last_scan_source = $19,
-           last_scanned_at = $20,
+           risk_score = $12,
+           risk_band = $13,
+           rule_hits = $14::jsonb,
+           first_hit_at = $15,
+           last_hit_at = $16,
+           minimum_lock_until = $17,
+           main_site_sync_status = $18,
+           main_site_sync_error = $19,
+           last_scan_status = $20,
+           last_scan_error = $21,
+           last_scan_source = $22,
+           last_scanned_at = $23,
            released_by_sub2api_user_id = NULL,
            released_by_email = '',
            released_by_username = '',
@@ -402,6 +474,9 @@ export class RiskRepository {
         input.windowEndedAt,
         input.distinctIpCount,
         JSON.stringify(input.ipSamples),
+        input.riskScore,
+        input.riskBand,
+        JSON.stringify(input.ruleHits),
         input.firstHitAt,
         input.lastHitAt,
         input.minimumLockUntil,
@@ -434,15 +509,18 @@ export class RiskRepository {
            window_ended_at = $9,
            distinct_ip_count = $10,
            ip_samples = $11::jsonb,
-           first_hit_at = $12,
-           last_hit_at = $13,
-           minimum_lock_until = $14,
-           main_site_sync_status = $15,
-           main_site_sync_error = $16,
-           last_scan_status = $17,
-           last_scan_error = $18,
-           last_scan_source = $19,
-           last_scanned_at = $20,
+           risk_score = $12,
+           risk_band = $13,
+           rule_hits = $14::jsonb,
+           first_hit_at = $15,
+           last_hit_at = $16,
+           minimum_lock_until = $17,
+           main_site_sync_status = $18,
+           main_site_sync_error = $19,
+           last_scan_status = $20,
+           last_scan_error = $21,
+           last_scan_source = $22,
+           last_scanned_at = $23,
            updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -458,6 +536,9 @@ export class RiskRepository {
         input.windowEndedAt,
         input.distinctIpCount,
         JSON.stringify(input.ipSamples),
+        input.riskScore,
+        input.riskBand,
+        JSON.stringify(input.ruleHits),
         input.firstHitAt,
         input.lastHitAt,
         input.minimumLockUntil,
@@ -833,6 +914,9 @@ export class RiskRepository {
       windowEndedAt: String(row.window_ended_at),
       distinctIpCount: Number(row.distinct_ip_count ?? 0),
       ipSamples: toStringArray(row.ip_samples),
+      riskScore: Number(row.risk_score ?? 0),
+      riskBand: toRiskBand(row.risk_band),
+      ruleHits: toRuleHits(row.rule_hits),
       firstHitAt: String(row.first_hit_at),
       lastHitAt: String(row.last_hit_at),
       minimumLockUntil: String(row.minimum_lock_until),

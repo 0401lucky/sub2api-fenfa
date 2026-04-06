@@ -185,6 +185,9 @@ export interface AdminRiskObservation {
   window_6h_ip_count: number;
   window_24h_ip_count: number;
   ip_samples: string[];
+  risk_score: number;
+  risk_band: 'normal' | 'observe' | 'block';
+  rule_hits: AdminRiskRuleHit[];
   first_hit_at: string;
   last_hit_at: string;
 }
@@ -210,6 +213,9 @@ export interface AdminRiskEvent {
   windowEndedAt: string;
   distinctIpCount: number;
   ipSamples: string[];
+  riskScore: number;
+  riskBand: 'normal' | 'observe' | 'block';
+  ruleHits: AdminRiskRuleHit[];
   firstHitAt: string;
   lastHitAt: string;
   minimumLockUntil: string;
@@ -261,8 +267,19 @@ export type AdminMonitoringActionType =
   | 'cloudflare_block_ip'
   | 'cloudflare_unblock_ip';
 
+export interface AdminRiskRuleHit {
+  code: string;
+  label: string;
+  level: 'info' | 'warn' | 'high';
+  window: '10m' | '1h' | '3h' | '6h' | '24h';
+  actual: number;
+  threshold: number;
+  score: number;
+}
+
 export interface AdminMonitoringSnapshotPoint {
   snapshot_at: string;
+  raw_request_count_24h: number;
   request_count_24h: number;
   active_user_count_24h: number;
   unique_ip_count_24h: number;
@@ -307,7 +324,9 @@ export interface AdminMonitoringOverview {
     snapshot_interval_ms: number;
   };
   summary: {
+    raw_request_count_24h: number;
     request_count_24h: number;
+    excluded_request_count_24h: number;
     active_user_count_24h: number;
     unique_ip_count_24h: number;
     observe_user_count_1h: number;
@@ -316,12 +335,27 @@ export interface AdminMonitoringOverview {
     shared_ip_count_1h: number;
     shared_ip_count_24h: number;
   };
+  excluded_breakdown: {
+    invalid_created_at: number;
+    missing_user_id: number;
+    missing_ip_address: number;
+    outside_window: number;
+  };
   windows: {
     observe_user_count_1h: number;
     observe_user_count_24h: number;
     shared_user_count_24h: number;
     shared_ip_count_1h: number;
     shared_ip_count_24h: number;
+  };
+  usage_sync: {
+    last_started_at: string | null;
+    last_finished_at: string | null;
+    last_status: 'idle' | 'running' | 'success' | 'failed';
+    last_error: string;
+    fetched_page_count: number;
+    upserted_count: number;
+    updated_at: string;
   };
   last_scan: AdminRiskScanState;
   snapshot_points: AdminMonitoringSnapshotPoint[];
@@ -336,13 +370,18 @@ export interface AdminMonitoringIpSampleUser {
 
 export interface AdminMonitoringIpItem {
   ip_address: string;
+  request_count_10m: number;
   request_count_1h: number;
   request_count_24h: number;
+  user_count_10m: number;
   user_count_1h: number;
   user_count_24h: number;
   first_seen_at: string;
   last_seen_at: string;
   risk_level: 'normal' | 'observe' | 'block';
+  risk_score: number;
+  risk_band: 'normal' | 'observe' | 'block';
+  rule_hits: AdminRiskRuleHit[];
   sample_users: AdminMonitoringIpSampleUser[];
 }
 
@@ -370,6 +409,9 @@ export interface AdminMonitoringIpUserItem {
   request_count_24h: number;
   unique_ip_count_1h: number;
   unique_ip_count_24h: number;
+  risk_score: number;
+  risk_band: 'normal' | 'observe' | 'block';
+  rule_hits: AdminRiskRuleHit[];
   first_seen_at: string;
   last_seen_at: string;
 }
@@ -411,6 +453,9 @@ export interface AdminMonitoringUserItem {
   request_count_24h: number;
   unique_ip_count_1h: number;
   unique_ip_count_24h: number;
+  risk_score: number;
+  risk_band: 'normal' | 'observe' | 'block';
+  rule_hits: AdminRiskRuleHit[];
   first_seen_at: string;
   last_seen_at: string;
 }
@@ -448,6 +493,24 @@ export interface AdminMonitoringUserStatusResult {
     role: 'admin' | 'user';
     status: string;
   };
+}
+
+export interface AdminMonitoringIpDetailResponse {
+  ip: AdminMonitoringIpItem;
+  items: AdminMonitoringIpUserItem[];
+  total: number;
+  cloudflare: AdminMonitoringIpCloudflareStatus;
+  recent_actions: AdminMonitoringActionItem[];
+  generated_at: string;
+}
+
+export interface AdminMonitoringUserDetailResponse {
+  user: AdminMonitoringUserItem;
+  items: AdminMonitoringUserIpItem[];
+  total: number;
+  open_risk_event: AdminRiskEvent | null;
+  recent_actions: AdminMonitoringActionItem[];
+  generated_at: string;
 }
 
 export interface AdminCheckinItem {

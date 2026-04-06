@@ -27,6 +27,8 @@ export interface UserSecurityState {
 export type RiskEventStatus = 'active' | 'pending_release' | 'released';
 export type RiskSyncStatus = 'pending' | 'success' | 'failed';
 export type RiskScanStateStatus = 'idle' | 'running' | 'success' | 'failed';
+export type RiskBand = 'normal' | 'observe' | 'block';
+export type RiskRuleHitLevel = 'info' | 'warn' | 'high';
 export type MonitoringActionType =
   | 'disable_user'
   | 'enable_user'
@@ -37,6 +39,16 @@ export type MonitoringActionType =
   | 'cloudflare_unblock_ip';
 export type MonitoringActionTargetType = 'user' | 'risk_event' | 'scan' | 'ip';
 export type MonitoringActionResultStatus = 'success' | 'failed' | 'blocked';
+
+export interface RiskRuleHit {
+  code: string;
+  label: string;
+  level: RiskRuleHitLevel;
+  window: '10m' | '1h' | '3h' | '6h' | '24h';
+  actual: number;
+  threshold: number;
+  score: number;
+}
 
 export interface RiskEvent {
   id: number;
@@ -52,6 +64,9 @@ export interface RiskEvent {
   windowEndedAt: string;
   distinctIpCount: number;
   ipSamples: string[];
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   firstHitAt: string;
   lastHitAt: string;
   minimumLockUntil: string;
@@ -84,6 +99,7 @@ export interface RiskScanState {
 export interface MonitoringSnapshot {
   id: number;
   snapshotAt: string;
+  rawRequestCount24h: number;
   requestCount24h: number;
   activeUserCount24h: number;
   uniqueIpCount24h: number;
@@ -109,6 +125,16 @@ export interface MonitoringAction {
   detail: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface UsageSyncState {
+  lastStartedAt: string | null;
+  lastFinishedAt: string | null;
+  lastStatus: RiskScanStateStatus;
+  lastError: string;
+  fetchedPageCount: number;
+  upsertedCount: number;
+  updatedAt: string;
 }
 
 export type CheckinMode = 'normal' | 'blindbox';

@@ -15,6 +15,26 @@ import {
 import { fail, ok } from '../utils/response.js';
 import { asyncHandler } from '../utils/async-handler.js';
 
+function toRuleHitsPayload(item: Array<{
+  code: string;
+  label: string;
+  level: string;
+  window: string;
+  actual: number;
+  threshold: number;
+  score: number;
+}>) {
+  return item.map((hit) => ({
+    code: hit.code,
+    label: hit.label,
+    level: hit.level,
+    window: hit.window,
+    actual: hit.actual,
+    threshold: hit.threshold,
+    score: hit.score
+  }));
+}
+
 function toMonitoringActionPayload(item: Awaited<ReturnType<typeof monitoringService.listActions>>['items'][number]) {
   return {
     id: item.id,
@@ -44,7 +64,9 @@ function toMonitoringOverviewPayload(overview: Awaited<ReturnType<typeof monitor
       snapshot_interval_ms: overview.thresholds.snapshotIntervalMs
     },
     summary: {
+      raw_request_count_24h: overview.summary.rawRequestCount24h,
       request_count_24h: overview.summary.requestCount24h,
+      excluded_request_count_24h: overview.summary.excludedCount24h,
       active_user_count_24h: overview.summary.activeUserCount24h,
       unique_ip_count_24h: overview.summary.uniqueIpCount24h,
       observe_user_count_1h: overview.summary.observeUserCount1h,
@@ -53,12 +75,27 @@ function toMonitoringOverviewPayload(overview: Awaited<ReturnType<typeof monitor
       shared_ip_count_1h: overview.summary.sharedIpCount1h,
       shared_ip_count_24h: overview.summary.sharedIpCount24h
     },
+    excluded_breakdown: {
+      invalid_created_at: overview.excludedBreakdown.invalidCreatedAt,
+      missing_user_id: overview.excludedBreakdown.missingUserId,
+      missing_ip_address: overview.excludedBreakdown.missingIpAddress,
+      outside_window: overview.excludedBreakdown.outsideWindow
+    },
     windows: {
       observe_user_count_1h: overview.windows.observeUserCount1h,
       observe_user_count_24h: overview.windows.observeUserCount24h,
       shared_user_count_24h: overview.windows.sharedUserCount24h,
       shared_ip_count_1h: overview.windows.sharedIpCount1h,
       shared_ip_count_24h: overview.windows.sharedIpCount24h
+    },
+    usage_sync: {
+      last_started_at: overview.usageSyncState.lastStartedAt,
+      last_finished_at: overview.usageSyncState.lastFinishedAt,
+      last_status: overview.usageSyncState.lastStatus,
+      last_error: overview.usageSyncState.lastError,
+      fetched_page_count: overview.usageSyncState.fetchedPageCount,
+      upserted_count: overview.usageSyncState.upsertedCount,
+      updated_at: overview.usageSyncState.updatedAt
     },
     last_scan: {
       last_started_at: overview.lastScan.lastStartedAt,
@@ -72,6 +109,7 @@ function toMonitoringOverviewPayload(overview: Awaited<ReturnType<typeof monitor
     },
     snapshot_points: overview.snapshotPoints.map((item) => ({
       snapshot_at: item.snapshotAt,
+      raw_request_count_24h: item.rawRequestCount24h,
       request_count_24h: item.requestCount24h,
       active_user_count_24h: item.activeUserCount24h,
       unique_ip_count_24h: item.uniqueIpCount24h,
@@ -88,13 +126,18 @@ function toMonitoringOverviewPayload(overview: Awaited<ReturnType<typeof monitor
 function toMonitoringIpPayload(item: Awaited<ReturnType<typeof monitoringService.listIps>>['items'][number]) {
   return {
     ip_address: item.ipAddress,
+    request_count_10m: item.requestCount10m,
     request_count_1h: item.requestCount1h,
     request_count_24h: item.requestCount24h,
+    user_count_10m: item.userCount10m,
     user_count_1h: item.userCount1h,
     user_count_24h: item.userCount24h,
     first_seen_at: item.firstSeenAt,
     last_seen_at: item.lastSeenAt,
     risk_level: item.riskLevel,
+    risk_score: item.riskScore,
+    risk_band: item.riskBand,
+    rule_hits: toRuleHitsPayload(item.ruleHits),
     sample_users: item.sampleUsers.map((user) => ({
       sub2api_user_id: user.sub2apiUserId,
       sub2api_username: user.sub2apiUsername,
@@ -118,6 +161,9 @@ function toMonitoringIpUserPayload(item: Awaited<ReturnType<typeof monitoringSer
     request_count_24h: item.requestCount24h,
     unique_ip_count_1h: item.uniqueIpCount1h,
     unique_ip_count_24h: item.uniqueIpCount24h,
+    risk_score: item.riskScore,
+    risk_band: item.riskBand,
+    rule_hits: toRuleHitsPayload(item.ruleHits),
     first_seen_at: item.firstSeenAt,
     last_seen_at: item.lastSeenAt
   };
@@ -138,6 +184,9 @@ function toMonitoringUserPayload(item: Awaited<ReturnType<typeof monitoringServi
     request_count_24h: item.requestCount24h,
     unique_ip_count_1h: item.uniqueIpCount1h,
     unique_ip_count_24h: item.uniqueIpCount24h,
+    risk_score: item.riskScore,
+    risk_band: item.riskBand,
+    rule_hits: toRuleHitsPayload(item.ruleHits),
     first_seen_at: item.firstSeenAt,
     last_seen_at: item.lastSeenAt
   };
@@ -214,6 +263,9 @@ function toAdminRiskObservationPayload(item: Awaited<ReturnType<typeof distribut
     window_6h_ip_count: item.window6hIpCount,
     window_24h_ip_count: item.window24hIpCount,
     ip_samples: item.ipSamples,
+    risk_score: item.riskScore,
+    risk_band: item.riskBand,
+    rule_hits: toRuleHitsPayload(item.ruleHits),
     first_hit_at: item.firstHitAt,
     last_hit_at: item.lastHitAt
   };
@@ -233,6 +285,9 @@ function toAdminRiskEventPayload(item: Awaited<ReturnType<typeof distributionDet
     windowEndedAt: item.windowEndedAt,
     distinctIpCount: item.distinctIpCount,
     ipSamples: item.ipSamples,
+    riskScore: item.riskScore,
+    riskBand: item.riskBand,
+    ruleHits: toRuleHitsPayload(item.ruleHits),
     firstHitAt: item.firstHitAt,
     lastHitAt: item.lastHitAt,
     minimumLockUntil: item.minimumLockUntil,
@@ -349,6 +404,30 @@ adminMonitoringRouter.get('/ips/:ip/cloudflare', asyncHandler(async (req, res) =
   }
 }));
 
+adminMonitoringRouter.get('/ips/:ip/detail', asyncHandler(async (req, res) => {
+  try {
+    const result = await monitoringService.getIpDetailView(req.params.ip);
+    ok(res, {
+      ip: toMonitoringIpPayload(result.ip),
+      items: result.users.map((item) => toMonitoringIpUserPayload(item)),
+      total: result.users.length,
+      cloudflare: toMonitoringIpCloudflarePayload(result.cloudflare),
+      recent_actions: result.recentActions.map((item) => toMonitoringActionPayload(item)),
+      generated_at: result.generatedAt
+    });
+  } catch (error) {
+    if (error instanceof MonitoringNotFoundError) {
+      fail(res, 404, 'NOT_FOUND', error.message);
+      return;
+    }
+    if (error instanceof MonitoringUpstreamError) {
+      fail(res, 502, 'CLOUDFLARE_UPSTREAM_ERROR', error.message);
+      return;
+    }
+    throw error;
+  }
+}));
+
 adminMonitoringRouter.get('/users', asyncHandler(async (req, res) => {
   const parsed = pagingSchema.safeParse(req.query);
   if (!parsed.success) {
@@ -382,6 +461,32 @@ adminMonitoringRouter.get('/users/:id/ips', asyncHandler(async (req, res) => {
       user: toMonitoringUserPayload(result.user),
       items: result.ips.map((item) => toMonitoringUserIpPayload(item)),
       total: result.ips.length,
+      generated_at: result.generatedAt
+    });
+  } catch (error) {
+    if (error instanceof MonitoringNotFoundError) {
+      fail(res, 404, 'NOT_FOUND', error.message);
+      return;
+    }
+    throw error;
+  }
+}));
+
+adminMonitoringRouter.get('/users/:id/detail', asyncHandler(async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    fail(res, 400, 'BAD_REQUEST', 'id 非法');
+    return;
+  }
+
+  try {
+    const result = await monitoringService.getUserDetailView(userId);
+    ok(res, {
+      user: toMonitoringUserPayload(result.user),
+      items: result.ips.map((item) => toMonitoringUserIpPayload(item)),
+      total: result.ips.length,
+      open_risk_event: result.openRiskEvent ? toAdminRiskEventPayload(result.openRiskEvent) : null,
+      recent_actions: result.recentActions.map((item) => toMonitoringActionPayload(item)),
       generated_at: result.generatedAt
     });
   } catch (error) {

@@ -18,6 +18,44 @@ const {
   summarizeUsageLogs
 } = await import('./distribution-detection-service.js');
 
+function buildUsageSnapshot(entries: Array<{
+  userId: number;
+  email: string;
+  username: string;
+  linuxdoSubject: string | null;
+  role: 'admin' | 'user';
+  status: string;
+  ipAddress: string;
+  createdAt: string;
+  createdAtMs: number;
+}>) {
+  return {
+    generatedAt: new Date().toISOString(),
+    rawUsageCount24h: entries.length,
+    effectiveUsageCount24h: entries.length,
+    excludedCount24h: 0,
+    excludedBreakdown: {
+      invalidCreatedAt: 0,
+      missingUserId: 0,
+      missingIpAddress: 0,
+      outsideWindow: 0
+    },
+    entries: entries.map((item, index) => ({
+      usageId: index + 1,
+      ...item
+    })),
+    usageSyncState: {
+      lastStartedAt: new Date().toISOString(),
+      lastFinishedAt: new Date().toISOString(),
+      lastStatus: 'success' as const,
+      lastError: '',
+      fetchedPageCount: 1,
+      upsertedCount: entries.length,
+      updatedAt: new Date().toISOString()
+    }
+  };
+}
+
 function createRiskEvent() {
   return {
     id: 1,
@@ -113,19 +151,17 @@ describe('DistributionDetectionService access guard', () => {
         role: 'user',
         status: 'active'
       }),
-      listAdminUsageLogs: vi.fn().mockResolvedValue({
-        items: [
-          { id: 1, userId: 7, ipAddress: '1.1.1.1', createdAt: new Date().toISOString(), user: null },
-          { id: 2, userId: 7, ipAddress: '2.2.2.2', createdAt: new Date().toISOString(), user: null },
-          { id: 3, userId: 7, ipAddress: '3.3.3.3', createdAt: new Date().toISOString(), user: null },
-          { id: 4, userId: 7, ipAddress: '4.4.4.4', createdAt: new Date().toISOString(), user: null }
-        ],
-        total: 4,
-        page: 1,
-        pageSize: 200,
-        pages: 1
-      }),
       updateAdminUserStatus: vi.fn()
+    };
+    const usageAnalysis = {
+      getSnapshot: vi.fn().mockResolvedValue(
+        buildUsageSnapshot([
+          { userId: 7, email: 'normal-user@example.com', username: 'normal-user', linuxdoSubject: 'normal-user', role: 'user', status: 'active', ipAddress: '1.1.1.1', createdAt: new Date().toISOString(), createdAtMs: Date.now() },
+          { userId: 7, email: 'normal-user@example.com', username: 'normal-user', linuxdoSubject: 'normal-user', role: 'user', status: 'active', ipAddress: '2.2.2.2', createdAt: new Date().toISOString(), createdAtMs: Date.now() },
+          { userId: 7, email: 'normal-user@example.com', username: 'normal-user', linuxdoSubject: 'normal-user', role: 'user', status: 'active', ipAddress: '3.3.3.3', createdAt: new Date().toISOString(), createdAtMs: Date.now() },
+          { userId: 7, email: 'normal-user@example.com', username: 'normal-user', linuxdoSubject: 'normal-user', role: 'user', status: 'active', ipAddress: '4.4.4.4', createdAt: new Date().toISOString(), createdAtMs: Date.now() }
+        ])
+      )
     };
     const welfare = {
       listAdminWhitelist: vi.fn().mockResolvedValue([]),
@@ -138,7 +174,8 @@ describe('DistributionDetectionService access guard', () => {
       sessionState as never,
       sub2api as never,
       welfare as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const decision = await service.evaluateAccess(
@@ -176,8 +213,10 @@ describe('DistributionDetectionService access guard', () => {
         role: 'admin',
         status: 'active'
       }),
-      listAdminUsageLogs: vi.fn(),
       updateAdminUserStatus: vi.fn()
+    };
+    const usageAnalysis = {
+      getSnapshot: vi.fn()
     };
     const welfare = {
       listAdminWhitelist: vi.fn().mockResolvedValue([]),
@@ -190,7 +229,8 @@ describe('DistributionDetectionService access guard', () => {
       sessionState as never,
       sub2api as never,
       welfare as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const decision = await service.evaluateAccess(
@@ -207,7 +247,7 @@ describe('DistributionDetectionService access guard', () => {
       blockedEvent: null,
       sessionInvalidated: false
     });
-    expect(sub2api.listAdminUsageLogs).not.toHaveBeenCalled();
+    expect(usageAnalysis.getSnapshot).not.toHaveBeenCalled();
   });
 
   it('已有活跃事件时不会重复创建或重复封禁', async () => {
@@ -222,8 +262,10 @@ describe('DistributionDetectionService access guard', () => {
     };
     const sub2api = {
       getAdminUserById: vi.fn(),
-      listAdminUsageLogs: vi.fn(),
       updateAdminUserStatus: vi.fn()
+    };
+    const usageAnalysis = {
+      getSnapshot: vi.fn()
     };
     const welfare = {
       listAdminWhitelist: vi.fn(),
@@ -236,7 +278,8 @@ describe('DistributionDetectionService access guard', () => {
       sessionState as never,
       sub2api as never,
       welfare as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const decision = await service.evaluateAccess(
@@ -304,8 +347,10 @@ describe('DistributionDetectionService access guard', () => {
         role: 'user',
         status: 'active'
       }),
-      listAdminUsageLogs: vi.fn(),
       updateAdminUserStatus: vi.fn()
+    };
+    const usageAnalysis = {
+      getSnapshot: vi.fn()
     };
     const welfare = {
       listAdminWhitelist: vi.fn(),
@@ -318,7 +363,8 @@ describe('DistributionDetectionService access guard', () => {
       sessionState as never,
       sub2api as never,
       welfare as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const result = await service.listEvents({
@@ -347,41 +393,24 @@ describe('DistributionDetectionService access guard', () => {
       bumpSessionVersion: vi.fn()
     };
     const sub2api = {
-      getAdminUserById: vi
-        .fn()
-        .mockResolvedValueOnce({
-          id: 7,
-          email: 'observe@example.com',
-          username: 'observe-user',
-          role: 'user',
-          status: 'active'
-        })
-        .mockResolvedValueOnce({
-          id: 8,
-          email: 'ban@example.com',
-          username: 'ban-user',
-          role: 'user',
-          status: 'active'
-        }),
-      listAdminUsageLogs: vi.fn().mockResolvedValue({
-        items: [
-          { id: 1, userId: 7, ipAddress: '1.1.1.1', createdAt: now, user: null },
-          { id: 2, userId: 7, ipAddress: '2.2.2.2', createdAt: now, user: null },
-          { id: 3, userId: 7, ipAddress: '3.3.3.3', createdAt: now, user: null },
-          { id: 4, userId: 7, ipAddress: '4.4.4.4', createdAt: now, user: null },
-          { id: 5, userId: 8, ipAddress: '5.5.5.1', createdAt: now, user: null },
-          { id: 6, userId: 8, ipAddress: '5.5.5.2', createdAt: now, user: null },
-          { id: 7, userId: 8, ipAddress: '5.5.5.3', createdAt: now, user: null },
-          { id: 8, userId: 8, ipAddress: '5.5.5.4', createdAt: now, user: null },
-          { id: 9, userId: 8, ipAddress: '5.5.5.5', createdAt: now, user: null },
-          { id: 10, userId: 8, ipAddress: '5.5.5.6', createdAt: now, user: null }
-        ],
-        total: 10,
-        page: 1,
-        pageSize: 200,
-        pages: 1
-      }),
+      getAdminUserById: vi.fn(),
       updateAdminUserStatus: vi.fn()
+    };
+    const usageAnalysis = {
+      getSnapshot: vi.fn().mockResolvedValue(
+        buildUsageSnapshot([
+          { userId: 7, email: 'observe@example.com', username: 'observe-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '1.1.1.1', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 7, email: 'observe@example.com', username: 'observe-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '2.2.2.2', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 7, email: 'observe@example.com', username: 'observe-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '3.3.3.3', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 7, email: 'observe@example.com', username: 'observe-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '4.4.4.4', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 8, email: 'ban@example.com', username: 'ban-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '5.5.5.1', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 8, email: 'ban@example.com', username: 'ban-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '5.5.5.2', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 8, email: 'ban@example.com', username: 'ban-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '5.5.5.3', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 8, email: 'ban@example.com', username: 'ban-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '5.5.5.4', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 8, email: 'ban@example.com', username: 'ban-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '5.5.5.5', createdAt: now, createdAtMs: Date.parse(now) },
+          { userId: 8, email: 'ban@example.com', username: 'ban-user', linuxdoSubject: null, role: 'user', status: 'active', ipAddress: '5.5.5.6', createdAt: now, createdAtMs: Date.parse(now) }
+        ])
+      )
     };
     const welfare = {
       listAdminWhitelist: vi.fn().mockResolvedValue([]),
@@ -394,7 +423,8 @@ describe('DistributionDetectionService access guard', () => {
       sessionState as never,
       sub2api as never,
       welfare as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const result = await service.listObservations({

@@ -7,7 +7,10 @@ import type {
   MonitoringAction,
   MonitoringActionType,
   MonitoringSnapshot,
+  RiskBand,
+  RiskEvent,
   RiskEventStatus,
+  RiskRuleHit,
   RiskScanState
 } from '../types/domain.js';
 import { extractLinuxDoSubjectFromEmail } from '../utils/oauth.js';
@@ -24,14 +27,23 @@ import {
 } from './cloudflare-client.js';
 import {
   sub2apiClient,
-  type AdminUsageLogRecord,
   type AdminUserRecord,
   type Sub2apiClient
 } from './sub2api-client.js';
+import { buildIpRuleHits, buildUserRuleHits, riskBandFromScore, scoreRiskHits } from './monitoring-rules.js';
+import {
+  usageAnalysisService,
+  type EffectiveUsageEntry,
+  type UsageAnalysisService,
+  type UsageAnalysisSnapshot,
+  type UsageExcludedBreakdown
+} from './usage-analysis-service.js';
 
+const MONITORING_WINDOW_10M_MS = 10 * 60 * 1000;
 const MONITORING_WINDOW_1H_MS = 60 * 60 * 1000;
+const MONITORING_WINDOW_3H_MS = 3 * 60 * 60 * 1000;
+const MONITORING_WINDOW_6H_MS = 6 * 60 * 60 * 1000;
 const MONITORING_WINDOW_24H_MS = 24 * 60 * 60 * 1000;
-const MONITORING_USAGE_PAGE_SIZE = 200;
 const MONITORING_MAX_SAMPLE_USERS = 4;
 const CLOUDFLARE_MANAGED_RULE_PREFIX = 'welfare-monitoring|';
 
@@ -41,17 +53,7 @@ interface LoggerLike {
   error(message: string, error?: unknown): void;
 }
 
-interface MonitoringUsageEntry {
-  userId: number;
-  email: string;
-  username: string;
-  linuxdoSubject: string | null;
-  role: 'admin' | 'user';
-  status: string;
-  ipAddress: string;
-  createdAt: string;
-  createdAtMs: number;
-}
+type MonitoringUsageEntry = EffectiveUsageEntry;
 
 interface MonitoringProtectedState {
   protectedUserIds: Set<number>;
@@ -60,6 +62,7 @@ interface MonitoringProtectedState {
 
 export interface MonitoringSnapshotPoint {
   snapshotAt: string;
+  rawRequestCount24h: number;
   requestCount24h: number;
   activeUserCount24h: number;
   uniqueIpCount24h: number;
@@ -82,7 +85,9 @@ export interface MonitoringOverview {
     snapshotIntervalMs: number;
   };
   summary: {
+    rawRequestCount24h: number;
     requestCount24h: number;
+    excludedCount24h: number;
     activeUserCount24h: number;
     uniqueIpCount24h: number;
     observeUserCount1h: number;
@@ -91,6 +96,7 @@ export interface MonitoringOverview {
     sharedIpCount1h: number;
     sharedIpCount24h: number;
   };
+  excludedBreakdown: UsageExcludedBreakdown;
   windows: {
     observeUserCount1h: number;
     observeUserCount24h: number;
@@ -98,6 +104,7 @@ export interface MonitoringOverview {
     sharedIpCount1h: number;
     sharedIpCount24h: number;
   };
+  usageSyncState: UsageAnalysisSnapshot['usageSyncState'];
   lastScan: RiskScanState;
   snapshotPoints: MonitoringSnapshotPoint[];
   recentActions: MonitoringActionItem[];
@@ -117,19 +124,27 @@ export interface MonitoringIpUserItem {
   requestCount24h: number;
   uniqueIpCount1h: number;
   uniqueIpCount24h: number;
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   firstSeenAt: string;
   lastSeenAt: string;
 }
 
 export interface MonitoringIpItem {
   ipAddress: string;
+  requestCount10m: number;
   requestCount1h: number;
   requestCount24h: number;
+  userCount10m: number;
   userCount1h: number;
   userCount24h: number;
   firstSeenAt: string;
   lastSeenAt: string;
   riskLevel: 'normal' | 'observe' | 'block';
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   sampleUsers: Array<{
     sub2apiUserId: number;
     sub2apiUsername: string;
@@ -160,6 +175,9 @@ export interface MonitoringUserItem {
   requestCount24h: number;
   uniqueIpCount1h: number;
   uniqueIpCount24h: number;
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   firstSeenAt: string;
   lastSeenAt: string;
 }
@@ -190,8 +208,26 @@ interface MonitoringUserDetail extends MonitoringUserItem {
   ips: MonitoringUserIpItem[];
 }
 
+export interface MonitoringIpDetailView {
+  ip: MonitoringIpItem;
+  users: MonitoringIpUserItem[];
+  cloudflare: MonitoringIpCloudflareStatus;
+  recentActions: MonitoringActionItem[];
+  generatedAt: string;
+}
+
+export interface MonitoringUserDetailView {
+  user: MonitoringUserItem;
+  ips: MonitoringUserIpItem[];
+  openRiskEvent: RiskEvent | null;
+  recentActions: MonitoringActionItem[];
+  generatedAt: string;
+}
+
 interface MonitoringAggregateSummary {
+  rawRequestCount24h: number;
   requestCount24h: number;
+  excludedCount24h: number;
   activeUserCount24h: number;
   uniqueIpCount24h: number;
   observeUserCount1h: number;
@@ -206,14 +242,10 @@ interface MonitoringAggregateSummary {
 interface MonitoringAggregateIndex {
   generatedAt: string;
   summary: MonitoringAggregateSummary;
+  excludedBreakdown: UsageExcludedBreakdown;
+  usageSyncState: UsageAnalysisSnapshot['usageSyncState'];
   ips: MonitoringIpDetail[];
   users: MonitoringUserDetail[];
-}
-
-interface MonitoringLiveCacheValue {
-  generatedAt: string;
-  entries: MonitoringUsageEntry[];
-  expiresAtMs: number;
 }
 
 interface MonitoringAggregateCacheValue {
@@ -223,10 +255,6 @@ interface MonitoringAggregateCacheValue {
 
 interface CloudflareRuleSnapshot extends CloudflareIpAccessRule {
   source: 'managed' | 'external';
-}
-
-function toDateOnly(value: Date): string {
-  return value.toISOString().slice(0, 10);
 }
 
 function normalizeIp(value: string | null | undefined): string | null {
@@ -264,6 +292,7 @@ function compareIsoDesc(left: string, right: string): number {
 function buildSnapshotPoint(item: MonitoringSnapshot): MonitoringSnapshotPoint {
   return {
     snapshotAt: item.snapshotAt,
+    rawRequestCount24h: item.rawRequestCount24h,
     requestCount24h: item.requestCount24h,
     activeUserCount24h: item.activeUserCount24h,
     uniqueIpCount24h: item.uniqueIpCount24h,
@@ -300,10 +329,11 @@ type WelfareRepositoryLike = Pick<WelfareRepository, 'listAdminWhitelist'>;
 
 type Sub2apiClientLike = Pick<
   Sub2apiClient,
-  'getAdminUserById' | 'listAdminUsageLogs' | 'updateAdminUserStatus'
+  'getAdminUserById' | 'updateAdminUserStatus'
 >;
 
 type DistributionDetectionServiceLike = Pick<typeof distributionDetectionService, 'getOverview'>;
+type UsageAnalysisServiceLike = Pick<UsageAnalysisService, 'getSnapshot'>;
 
 export class MonitoringNotFoundError extends Error {
   constructor(message: string) {
@@ -335,6 +365,10 @@ export class MonitoringUpstreamError extends Error {
 
 export function buildMonitoringAggregateIndex(_input: {
   entries: MonitoringUsageEntry[];
+  rawUsageCount24h?: number;
+  excludedCount24h?: number;
+  excludedBreakdown?: UsageExcludedBreakdown;
+  usageSyncState?: UsageAnalysisSnapshot['usageSyncState'];
   nowMs?: number;
   observeIpThreshold: number;
   blockIpThreshold: number;
@@ -347,7 +381,10 @@ export function buildMonitoringAggregateIndex(_input: {
 }): MonitoringAggregateIndex {
   const input = _input;
   const nowMs = input.nowMs ?? Date.now();
+  const tenMinuteCutoff = nowMs - MONITORING_WINDOW_10M_MS;
   const oneHourCutoff = nowMs - MONITORING_WINDOW_1H_MS;
+  const threeHourCutoff = nowMs - MONITORING_WINDOW_3H_MS;
+  const sixHourCutoff = nowMs - MONITORING_WINDOW_6H_MS;
   const riskEventByUserId = new Map(
     input.openRiskEvents.map((item) => [item.sub2apiUserId, item] as const)
   );
@@ -365,6 +402,8 @@ export function buildMonitoringAggregateIndex(_input: {
         }
       >;
       uniqueIpSet1h: Set<string>;
+      uniqueIpSet3h: Set<string>;
+      uniqueIpSet6h: Set<string>;
       uniqueIpSet24h: Set<string>;
     }
   >();
@@ -381,6 +420,7 @@ export function buildMonitoringAggregateIndex(_input: {
           lastSeenAt: string;
         }
       >;
+      userSet10m: Set<number>;
       userSet1h: Set<number>;
       userSet24h: Set<number>;
     }
@@ -411,12 +451,17 @@ export function buildMonitoringAggregateIndex(_input: {
           requestCount24h: 0,
           uniqueIpCount1h: 0,
           uniqueIpCount24h: 0,
+          riskScore: 0,
+          riskBand: 'normal',
+          ruleHits: [],
           firstSeenAt: entry.createdAt,
           lastSeenAt: entry.createdAt,
           ips: []
         },
         ipStats: new Map(),
         uniqueIpSet1h: new Set(),
+        uniqueIpSet3h: new Set(),
+        uniqueIpSet6h: new Set(),
         uniqueIpSet24h: new Set()
       };
 
@@ -424,6 +469,12 @@ export function buildMonitoringAggregateIndex(_input: {
     if (entry.createdAtMs >= oneHourCutoff) {
       userState.detail.requestCount1h += 1;
       userState.uniqueIpSet1h.add(entry.ipAddress);
+    }
+    if (entry.createdAtMs >= threeHourCutoff) {
+      userState.uniqueIpSet3h.add(entry.ipAddress);
+    }
+    if (entry.createdAtMs >= sixHourCutoff) {
+      userState.uniqueIpSet6h.add(entry.ipAddress);
     }
     userState.uniqueIpSet24h.add(entry.ipAddress);
     if (Date.parse(entry.createdAt) < Date.parse(userState.detail.firstSeenAt)) {
@@ -458,23 +509,33 @@ export function buildMonitoringAggregateIndex(_input: {
       {
         detail: {
           ipAddress: entry.ipAddress,
+          requestCount10m: 0,
           requestCount1h: 0,
           requestCount24h: 0,
+          userCount10m: 0,
           userCount1h: 0,
           userCount24h: 0,
           firstSeenAt: entry.createdAt,
           lastSeenAt: entry.createdAt,
           riskLevel: 'normal',
+          riskScore: 0,
+          riskBand: 'normal',
+          ruleHits: [],
           sampleUsers: [],
           users: []
         },
         userStats: new Map(),
+        userSet10m: new Set(),
         userSet1h: new Set(),
         userSet24h: new Set()
       };
 
     ipState.detail.requestCount24h += 1;
     ipState.userSet24h.add(entry.userId);
+    if (entry.createdAtMs >= tenMinuteCutoff) {
+      ipState.detail.requestCount10m += 1;
+      ipState.userSet10m.add(entry.userId);
+    }
     if (entry.createdAtMs >= oneHourCutoff) {
       ipState.detail.requestCount1h += 1;
       ipState.userSet1h.add(entry.userId);
@@ -509,19 +570,38 @@ export function buildMonitoringAggregateIndex(_input: {
 
   for (const [, userState] of userMap) {
     userState.detail.uniqueIpCount1h = userState.uniqueIpSet1h.size;
+    const uniqueIpCount3h = userState.uniqueIpSet3h.size;
+    const uniqueIpCount6h = userState.uniqueIpSet6h.size;
     userState.detail.uniqueIpCount24h = userState.uniqueIpSet24h.size;
+    userState.detail.ruleHits = buildUserRuleHits({
+      uniqueIpCount1h: userState.detail.uniqueIpCount1h,
+      uniqueIpCount3h,
+      uniqueIpCount6h,
+      uniqueIpCount24h: userState.detail.uniqueIpCount24h,
+      observeThreshold: input.observeIpThreshold,
+      blockThreshold: input.blockIpThreshold
+    });
+    userState.detail.riskScore = scoreRiskHits(userState.detail.ruleHits);
+    userState.detail.riskBand = riskBandFromScore(userState.detail.riskScore);
   }
 
   for (const [, ipState] of ipMap) {
+    ipState.detail.userCount10m = ipState.userSet10m.size;
     ipState.detail.userCount1h = ipState.userSet1h.size;
     ipState.detail.userCount24h = ipState.userSet24h.size;
-    ipState.detail.riskLevel =
-      ipState.detail.userCount1h >= input.blockIpThreshold
-        ? 'block'
-        : ipState.detail.userCount1h >= input.observeIpThreshold ||
-            ipState.detail.userCount24h >= input.observeIpThreshold
-          ? 'observe'
-          : 'normal';
+    ipState.detail.ruleHits = buildIpRuleHits({
+      userCount10m: ipState.detail.userCount10m,
+      userCount1h: ipState.detail.userCount1h,
+      userCount24h: ipState.detail.userCount24h,
+      linkedRiskUserCount: Array.from(ipState.userSet24h).filter((userId) =>
+        riskEventByUserId.has(userId)
+      ).length,
+      observeThreshold: input.observeIpThreshold,
+      blockThreshold: input.blockIpThreshold
+    });
+    ipState.detail.riskScore = scoreRiskHits(ipState.detail.ruleHits);
+    ipState.detail.riskBand = riskBandFromScore(ipState.detail.riskScore);
+    ipState.detail.riskLevel = ipState.detail.riskBand;
   }
 
   const users = Array.from(userMap.values()).map((userState) => {
@@ -565,6 +645,9 @@ export function buildMonitoringAggregateIndex(_input: {
           requestCount24h: stat.requestCount24h,
           uniqueIpCount1h: userDetail?.uniqueIpCount1h ?? 0,
           uniqueIpCount24h: userDetail?.uniqueIpCount24h ?? 0,
+          riskScore: userDetail?.riskScore ?? 0,
+          riskBand: userDetail?.riskBand ?? 'normal',
+          ruleHits: userDetail?.ruleHits ?? [],
           firstSeenAt: stat.firstSeenAt,
           lastSeenAt: stat.lastSeenAt
         };
@@ -591,13 +674,16 @@ export function buildMonitoringAggregateIndex(_input: {
   });
 
   const sortedIps = ips.sort((left, right) => {
-    const riskLevelWeight = {
+    const riskLevelWeight: Record<RiskBand, number> = {
       block: 2,
       observe: 1,
       normal: 0
     };
-    if (riskLevelWeight[right.riskLevel] !== riskLevelWeight[left.riskLevel]) {
-      return riskLevelWeight[right.riskLevel] - riskLevelWeight[left.riskLevel];
+    if (riskLevelWeight[right.riskBand] !== riskLevelWeight[left.riskBand]) {
+      return riskLevelWeight[right.riskBand] - riskLevelWeight[left.riskBand];
+    }
+    if (right.riskScore !== left.riskScore) {
+      return right.riskScore - left.riskScore;
     }
     if (right.userCount1h !== left.userCount1h) {
       return right.userCount1h - left.userCount1h;
@@ -617,6 +703,9 @@ export function buildMonitoringAggregateIndex(_input: {
     if (riskWeightDelta !== 0) {
       return riskWeightDelta;
     }
+    if (right.riskScore !== left.riskScore) {
+      return right.riskScore - left.riskScore;
+    }
     if (right.uniqueIpCount1h !== left.uniqueIpCount1h) {
       return right.uniqueIpCount1h - left.uniqueIpCount1h;
     }
@@ -632,7 +721,9 @@ export function buildMonitoringAggregateIndex(_input: {
   return {
     generatedAt: new Date(nowMs).toISOString(),
     summary: {
+      rawRequestCount24h: input.rawUsageCount24h ?? input.entries.length,
       requestCount24h: input.entries.length,
+      excludedCount24h: input.excludedCount24h ?? 0,
       activeUserCount24h: sortedUsers.length,
       uniqueIpCount24h: sortedIps.length,
       observeUserCount1h: sortedUsers.filter(
@@ -651,14 +742,31 @@ export function buildMonitoringAggregateIndex(_input: {
       sharedIpCount24h: sortedIps.filter((item) => item.userCount24h >= 2).length,
       sharedUserCount24h: sortedUsers.filter((item) => item.uniqueIpCount24h >= 2).length
     },
+    excludedBreakdown:
+      input.excludedBreakdown ??
+      {
+        invalidCreatedAt: 0,
+        missingUserId: 0,
+        missingIpAddress: 0,
+        outsideWindow: 0
+      },
+    usageSyncState:
+      input.usageSyncState ??
+      {
+        lastStartedAt: null,
+        lastFinishedAt: null,
+        lastStatus: 'idle',
+        lastError: '',
+        fetchedPageCount: 0,
+        upsertedCount: 0,
+        updatedAt: new Date(nowMs).toISOString()
+      },
     ips: sortedIps,
     users: sortedUsers
   };
 }
 
 export class MonitoringService {
-  private liveCache: MonitoringLiveCacheValue | null = null;
-  private liveCachePromise: Promise<MonitoringLiveCacheValue> | null = null;
   private aggregateCache: MonitoringAggregateCacheValue | null = null;
   private aggregateCachePromise: Promise<MonitoringAggregateIndex> | null = null;
 
@@ -670,7 +778,8 @@ export class MonitoringService {
     private readonly welfare: WelfareRepositoryLike,
     private readonly distribution: DistributionDetectionServiceLike,
     private readonly cloudflare: CloudflareClientLike,
-    private readonly logger: LoggerLike
+    private readonly logger: LoggerLike,
+    private readonly usageAnalysis: UsageAnalysisServiceLike = usageAnalysisService
   ) {}
 
   startSnapshotLoop(intervalMs = config.WELFARE_MONITOR_SNAPSHOT_INTERVAL_MS): NodeJS.Timeout {
@@ -708,7 +817,9 @@ export class MonitoringService {
         snapshotIntervalMs: config.WELFARE_MONITOR_SNAPSHOT_INTERVAL_MS
       },
       summary: {
+        rawRequestCount24h: aggregate.summary.rawRequestCount24h,
         requestCount24h: aggregate.summary.requestCount24h,
+        excludedCount24h: aggregate.summary.excludedCount24h,
         activeUserCount24h: aggregate.summary.activeUserCount24h,
         uniqueIpCount24h: aggregate.summary.uniqueIpCount24h,
         observeUserCount1h: aggregate.summary.observeUserCount1h,
@@ -717,6 +828,7 @@ export class MonitoringService {
         sharedIpCount1h: aggregate.summary.sharedIpCount1h,
         sharedIpCount24h: aggregate.summary.sharedIpCount24h
       },
+      excludedBreakdown: aggregate.excludedBreakdown,
       windows: {
         observeUserCount1h: aggregate.summary.observeUserCount1h,
         observeUserCount24h: aggregate.summary.observeUserCount24h,
@@ -724,6 +836,7 @@ export class MonitoringService {
         sharedIpCount1h: aggregate.summary.sharedIpCount1h,
         sharedIpCount24h: aggregate.summary.sharedIpCount24h
       },
+      usageSyncState: aggregate.usageSyncState,
       lastScan: riskOverview.lastScan,
       snapshotPoints: snapshots.map((item) => buildSnapshotPoint(item)),
       recentActions: recentActions.items
@@ -767,6 +880,25 @@ export class MonitoringService {
     return this.inspectIpCloudflareRule(target.ipAddress);
   }
 
+  async getIpDetailView(ipAddress: string): Promise<MonitoringIpDetailView> {
+    const { target, generatedAt } = await this.getIpDetailOrThrow(ipAddress);
+    const [cloudflare, recentActions] = await Promise.all([
+      this.inspectIpCloudflareRule(target.ipAddress),
+      this.listRecentActionsForContext({
+        ipAddress: target.ipAddress,
+        userIds: target.users.map((item) => item.sub2apiUserId)
+      })
+    ]);
+    const { users, ...ip } = target;
+    return {
+      ip,
+      users,
+      cloudflare,
+      recentActions,
+      generatedAt
+    };
+  }
+
   async listUsers(params: {
     page: number;
     pageSize: number;
@@ -795,6 +927,29 @@ export class MonitoringService {
     return {
       user,
       ips,
+      generatedAt: aggregate.generatedAt
+    };
+  }
+
+  async getUserDetailView(userId: number): Promise<MonitoringUserDetailView> {
+    const aggregate = await this.getAggregateIndex();
+    const target = aggregate.users.find((item) => item.sub2apiUserId === userId);
+    if (!target) {
+      throw new MonitoringNotFoundError('未找到该用户的监控数据');
+    }
+
+    const [openRiskEvent, recentActions] = await Promise.all([
+      this.riskRepository.getBlockingEventByUserId(userId),
+      this.listRecentActionsForContext({
+        userIds: [userId]
+      })
+    ]);
+    const { ips, ...user } = target;
+    return {
+      user,
+      ips,
+      openRiskEvent,
+      recentActions,
       generatedAt: aggregate.generatedAt
     };
   }
@@ -1219,6 +1374,7 @@ export class MonitoringService {
     await this.repository.purgeSnapshotsOlderThan(config.WELFARE_MONITOR_SNAPSHOT_RETENTION_DAYS);
     return this.repository.saveSnapshot({
       snapshotAt: aggregate.generatedAt,
+      rawRequestCount24h: aggregate.summary.rawRequestCount24h,
       requestCount24h: aggregate.summary.requestCount24h,
       activeUserCount24h: aggregate.summary.activeUserCount24h,
       uniqueIpCount24h: aggregate.summary.uniqueIpCount24h,
@@ -1228,6 +1384,32 @@ export class MonitoringService {
       sharedIpCount1h: aggregate.summary.sharedIpCount1h,
       sharedIpCount24h: aggregate.summary.sharedIpCount24h
     });
+  }
+
+  private async listRecentActionsForContext(input: {
+    ipAddress?: string;
+    userIds?: number[];
+  }): Promise<MonitoringActionItem[]> {
+    const userIds = new Set(input.userIds ?? []);
+    const recent = await this.repository.listActions({ page: 1, pageSize: 50 });
+    return recent.items
+      .filter((item) => {
+        const metadataUserId = Number(item.metadata.user_id ?? item.metadata.sub2api_user_id ?? 0);
+        const metadataIp = String(item.metadata.ip_address ?? '').trim().toLowerCase();
+        if (input.ipAddress && (item.targetLabel === input.ipAddress || metadataIp === input.ipAddress)) {
+          return true;
+        }
+        if (userIds.size > 0) {
+          if ((item.targetType === 'user' || item.targetType === 'risk_event') && item.targetId && userIds.has(item.targetId)) {
+            return true;
+          }
+          if (Number.isInteger(metadataUserId) && userIds.has(metadataUserId)) {
+            return true;
+          }
+        }
+        return false;
+      })
+      .slice(0, 10);
   }
 
   private async getIpDetailOrThrow(ipAddress: string): Promise<{
@@ -1478,8 +1660,6 @@ export class MonitoringService {
   }
 
   private invalidateCache() {
-    this.liveCache = null;
-    this.liveCachePromise = null;
     this.aggregateCache = null;
     this.aggregateCachePromise = null;
   }
@@ -1507,14 +1687,18 @@ export class MonitoringService {
     nowMs: number,
     forceRefresh: boolean
   ): Promise<MonitoringAggregateIndex> {
-    const [liveUsage, openRiskEvents, protectedUsers] = await Promise.all([
-      this.getLiveUsage(forceRefresh),
+    const [usageSnapshot, openRiskEvents, protectedUsers] = await Promise.all([
+      this.usageAnalysis.getSnapshot(forceRefresh),
       this.riskRepository.listRiskEventsForStatuses(['active', 'pending_release'], 1000),
       this.getProtectedState()
     ]);
 
     const index = buildMonitoringAggregateIndex({
-      entries: liveUsage.entries,
+      entries: usageSnapshot.entries,
+      rawUsageCount24h: usageSnapshot.rawUsageCount24h,
+      excludedCount24h: usageSnapshot.excludedCount24h,
+      excludedBreakdown: usageSnapshot.excludedBreakdown,
+      usageSyncState: usageSnapshot.usageSyncState,
       nowMs,
       observeIpThreshold: config.WELFARE_MONITOR_OBSERVE_IP_THRESHOLD,
       blockIpThreshold: config.WELFARE_MONITOR_BLOCK_IP_THRESHOLD,
@@ -1532,135 +1716,10 @@ export class MonitoringService {
 
     this.aggregateCache = {
       index,
-      expiresAtMs: liveUsage.expiresAtMs
+      expiresAtMs: nowMs + config.WELFARE_MONITOR_LIVE_CACHE_TTL_MS
     };
 
     return index;
-  }
-
-  private async getLiveUsage(forceRefresh = false): Promise<MonitoringLiveCacheValue> {
-    const nowMs = Date.now();
-    if (!forceRefresh && this.liveCache && this.liveCache.expiresAtMs > nowMs) {
-      return this.liveCache;
-    }
-
-    if (!forceRefresh && this.liveCachePromise) {
-      return this.liveCachePromise;
-    }
-
-    const task = this.loadLiveUsage(nowMs).finally(() => {
-      if (this.liveCachePromise === task) {
-        this.liveCachePromise = null;
-      }
-    });
-    this.liveCachePromise = task;
-    return task;
-  }
-
-  private async loadLiveUsage(nowMs: number): Promise<MonitoringLiveCacheValue> {
-    const rawLogs = await this.listUsageLogsForWindow(MONITORING_WINDOW_24H_MS);
-    const resolvedEntries = await this.resolveUsageEntries(rawLogs);
-    const nextValue = {
-      generatedAt: new Date(nowMs).toISOString(),
-      entries: resolvedEntries,
-      expiresAtMs: nowMs + config.WELFARE_MONITOR_LIVE_CACHE_TTL_MS
-    };
-    this.liveCache = nextValue;
-    return nextValue;
-  }
-
-  private async listUsageLogsForWindow(windowMs: number): Promise<AdminUsageLogRecord[]> {
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - windowMs);
-    const startDate = toDateOnly(windowStart);
-    const endDate = toDateOnly(now);
-
-    const items: AdminUsageLogRecord[] = [];
-    let page = 1;
-    let totalPages = 1;
-
-    while (page <= totalPages) {
-      const result = await this.sub2api.listAdminUsageLogs({
-        page,
-        pageSize: MONITORING_USAGE_PAGE_SIZE,
-        startDate,
-        endDate,
-        timezone: 'UTC',
-        exactTotal: true
-      });
-      items.push(...result.items);
-      totalPages = Math.max(1, result.pages);
-      if (result.items.length === 0) {
-        break;
-      }
-      page += 1;
-    }
-
-    return items.filter((item) => {
-      const createdAtMs = Date.parse(item.createdAt);
-      if (Number.isNaN(createdAtMs)) {
-        return false;
-      }
-      return createdAtMs >= windowStart.getTime() && createdAtMs <= now.getTime();
-    });
-  }
-
-  private async resolveUsageEntries(logs: AdminUsageLogRecord[]): Promise<MonitoringUsageEntry[]> {
-    const userIds = new Set<number>();
-    const snapshotByUserId = new Map<number, AdminUserRecord>();
-
-    for (const item of logs) {
-      if (!Number.isInteger(item.userId) || item.userId <= 0) {
-        continue;
-      }
-      userIds.add(item.userId);
-      if (item.user?.email) {
-        snapshotByUserId.set(item.userId, item.user);
-      }
-    }
-
-    const unresolvedUserIds = Array.from(userIds).filter((userId) => {
-      const snapshot = snapshotByUserId.get(userId);
-      return !snapshot?.email;
-    });
-    const resolvedUsers = await Promise.all(
-      unresolvedUserIds.map(async (userId) => [userId, await this.sub2api.getAdminUserById(userId)] as const)
-    );
-    resolvedUsers.forEach(([userId, user]) => {
-      if (user?.email) {
-        snapshotByUserId.set(userId, user);
-      }
-    });
-
-    return logs
-      .map((item) => {
-        const createdAtMs = Date.parse(item.createdAt);
-        const ipAddress = normalizeIp(item.ipAddress);
-        const snapshot = snapshotByUserId.get(item.userId);
-        if (
-          !Number.isInteger(item.userId) ||
-          item.userId <= 0 ||
-          Number.isNaN(createdAtMs) ||
-          !ipAddress
-        ) {
-          return null;
-        }
-
-        const email = snapshot?.email || `user-${item.userId}@unknown.invalid`;
-        const username = snapshot?.username || snapshot?.email || `user-${item.userId}`;
-        return {
-          userId: item.userId,
-          email,
-          username,
-          linuxdoSubject: extractLinuxDoSubjectFromEmail(email),
-          role: normalizeUserRole(snapshot?.role),
-          status: normalizeUserStatus(snapshot?.status),
-          ipAddress,
-          createdAt: item.createdAt,
-          createdAtMs
-        };
-      })
-      .filter((item): item is MonitoringUsageEntry => item !== null);
   }
 
   private async getProtectedState(): Promise<MonitoringProtectedState> {

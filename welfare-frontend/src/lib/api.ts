@@ -9,9 +9,11 @@ import type {
   AdminMonitoringActionList,
   AdminMonitoringActionType,
   AdminMonitoringIpCloudflareStatus,
+  AdminMonitoringIpDetailResponse,
   AdminMonitoringIpList,
   AdminMonitoringIpUsersResponse,
   AdminMonitoringOverview,
+  AdminMonitoringUserDetailResponse,
   AdminMonitoringUserIpsResponse,
   AdminMonitoringUserList,
   AdminMonitoringUserStatusResult,
@@ -254,6 +256,10 @@ export const api = {
     request<AdminMonitoringIpCloudflareStatus>(
       `/api/admin/monitoring/ips/${encodeURIComponent(ipAddress)}/cloudflare`
     ),
+  getAdminMonitoringIpDetail: (ipAddress: string) =>
+    request<AdminMonitoringIpDetailResponse>(
+      `/api/admin/monitoring/ips/${encodeURIComponent(ipAddress)}/detail`
+    ),
   challengeAdminMonitoringIp: (ipAddress: string, payload: { reason?: string } = {}) =>
     request<{ item: AdminMonitoringIpCloudflareStatus }>(
       `/api/admin/monitoring/ips/${encodeURIComponent(ipAddress)}/challenge`,
@@ -292,6 +298,8 @@ export const api = {
   },
   getAdminMonitoringUserIps: (userId: number) =>
     request<AdminMonitoringUserIpsResponse>(`/api/admin/monitoring/users/${userId}/ips`),
+  getAdminMonitoringUserDetail: (userId: number) =>
+    request<AdminMonitoringUserDetailResponse>(`/api/admin/monitoring/users/${userId}/detail`),
   disableAdminMonitoringUser: (userId: number, payload: { reason?: string } = {}) =>
     request<AdminMonitoringUserStatusResult>(`/api/admin/monitoring/users/${userId}/disable`, {
       method: 'POST',

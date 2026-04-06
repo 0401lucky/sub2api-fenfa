@@ -9,6 +9,7 @@ import type {
 
 export interface SaveMonitoringSnapshotInput {
   snapshotAt: string;
+  rawRequestCount24h: number;
   requestCount24h: number;
   activeUserCount24h: number;
   uniqueIpCount24h: number;
@@ -65,6 +66,7 @@ export class MonitoringRepository {
     const result = await this.db.query(
       `INSERT INTO welfare_monitoring_snapshots (
          snapshot_at,
+         raw_request_count_24h,
          request_count_24h,
          active_user_count_24h,
          unique_ip_count_24h,
@@ -74,10 +76,11 @@ export class MonitoringRepository {
          shared_ip_count_1h,
          shared_ip_count_24h
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         input.snapshotAt,
+        input.rawRequestCount24h,
         input.requestCount24h,
         input.activeUserCount24h,
         input.uniqueIpCount24h,
@@ -192,6 +195,7 @@ export class MonitoringRepository {
     return {
       id: Number(row.id),
       snapshotAt: String(row.snapshot_at),
+      rawRequestCount24h: Number(row.raw_request_count_24h ?? 0),
       requestCount24h: Number(row.request_count_24h ?? 0),
       activeUserCount24h: Number(row.active_user_count_24h ?? 0),
       uniqueIpCount24h: Number(row.unique_ip_count_24h ?? 0),

@@ -12,6 +12,46 @@ process.env.LINUXDO_REDIRECT_URI ??= 'http://localhost:8787/api/auth/linuxdo/cal
 process.env.SUB2API_BASE_URL ??= 'https://example.com';
 process.env.SUB2API_ADMIN_API_KEY ??= 'test-api-key';
 
+function buildUsageSnapshot(
+  entries: Array<{
+    userId: number;
+    email: string;
+    username: string;
+    linuxdoSubject: string | null;
+    role: 'admin' | 'user';
+    status: string;
+    ipAddress: string;
+    createdAt: string;
+    createdAtMs: number;
+  }>
+) {
+  return {
+    generatedAt: '2026-04-05T10:00:00.000Z',
+    rawUsageCount24h: entries.length,
+    effectiveUsageCount24h: entries.length,
+    excludedCount24h: 0,
+    excludedBreakdown: {
+      invalidCreatedAt: 0,
+      missingUserId: 0,
+      missingIpAddress: 0,
+      outsideWindow: 0
+    },
+    entries: entries.map((item, index) => ({
+      usageId: index + 1,
+      ...item
+    })),
+    usageSyncState: {
+      lastStartedAt: '2026-04-05T09:59:00.000Z',
+      lastFinishedAt: '2026-04-05T09:59:30.000Z',
+      lastStatus: 'success' as const,
+      lastError: '',
+      fetchedPageCount: 1,
+      upsertedCount: entries.length,
+      updatedAt: '2026-04-05T09:59:30.000Z'
+    }
+  };
+}
+
 describe('buildMonitoringAggregateIndex', () => {
   it('按用户和 IP 聚合 1h / 24h 数据', async () => {
     const { buildMonitoringAggregateIndex } = await import('./monitoring-service.js');
@@ -82,35 +122,34 @@ describe('MonitoringService aggregate cache', () => {
     const { MonitoringService } = await import('./monitoring-service.js');
 
     const listRiskEventsForStatuses = vi.fn().mockResolvedValue([]);
-    const listAdminUsageLogs = vi.fn().mockResolvedValue({
-      items: [
-        {
-          userId: 7,
-          createdAt: '2026-04-05T09:55:00.000Z',
-          ipAddress: '152.53.88.113',
-          user: {
-            id: 7,
+    const usageAnalysis = {
+      getSnapshot: vi.fn().mockResolvedValue(
+        buildUsageSnapshot([
+          {
+            userId: 7,
             email: 'u7@example.com',
             username: 'u7',
+            linuxdoSubject: null,
             role: 'user',
-            status: 'active'
-          }
-        },
-        {
-          userId: 8,
-          createdAt: '2026-04-05T09:56:00.000Z',
-          ipAddress: '38.14.250.69',
-          user: {
-            id: 8,
+            status: 'active',
+            ipAddress: '152.53.88.113',
+            createdAt: '2026-04-05T09:55:00.000Z',
+            createdAtMs: Date.parse('2026-04-05T09:55:00.000Z')
+          },
+          {
+            userId: 8,
             email: 'u8@example.com',
             username: 'u8',
+            linuxdoSubject: null,
             role: 'user',
-            status: 'active'
+            status: 'active',
+            ipAddress: '38.14.250.69',
+            createdAt: '2026-04-05T09:56:00.000Z',
+            createdAtMs: Date.parse('2026-04-05T09:56:00.000Z')
           }
-        }
-      ],
-      pages: 1
-    });
+        ])
+      )
+    };
     const listAdminWhitelist = vi.fn().mockResolvedValue([]);
 
     const service = new MonitoringService(
@@ -128,7 +167,6 @@ describe('MonitoringService aggregate cache', () => {
         bumpSessionVersion: vi.fn()
       } as never,
       {
-        listAdminUsageLogs,
         getAdminUserById: vi.fn(),
         updateAdminUserStatus: vi.fn()
       } as never,
@@ -143,7 +181,8 @@ describe('MonitoringService aggregate cache', () => {
         getDisabledReason: vi.fn().mockReturnValue(''),
         listIpAccessRules: vi.fn()
       } as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const filtered = await service.listIps({
@@ -155,7 +194,7 @@ describe('MonitoringService aggregate cache', () => {
 
     expect(filtered.items.map((item) => item.ipAddress)).toEqual(['152.53.88.113']);
     expect(detail.ip.ipAddress).toBe('152.53.88.113');
-    expect(listAdminUsageLogs).toHaveBeenCalledTimes(1);
+    expect(usageAnalysis.getSnapshot).toHaveBeenCalledTimes(1);
     expect(listRiskEventsForStatuses).toHaveBeenCalledTimes(1);
     expect(listAdminWhitelist).toHaveBeenCalledTimes(1);
   });
@@ -164,6 +203,34 @@ describe('MonitoringService aggregate cache', () => {
 describe('MonitoringService Cloudflare', () => {
   it('支持按 IP 关键字过滤共享 IP 榜', async () => {
     const { MonitoringService } = await import('./monitoring-service.js');
+    const usageAnalysis = {
+      getSnapshot: vi.fn().mockResolvedValue(
+        buildUsageSnapshot([
+          {
+            userId: 7,
+            email: 'u7@example.com',
+            username: 'u7',
+            linuxdoSubject: null,
+            role: 'user',
+            status: 'active',
+            ipAddress: '152.53.88.113',
+            createdAt: '2026-04-05T09:55:00.000Z',
+            createdAtMs: Date.parse('2026-04-05T09:55:00.000Z')
+          },
+          {
+            userId: 8,
+            email: 'u8@example.com',
+            username: 'u8',
+            linuxdoSubject: null,
+            role: 'user',
+            status: 'active',
+            ipAddress: '38.14.250.69',
+            createdAt: '2026-04-05T09:56:00.000Z',
+            createdAtMs: Date.parse('2026-04-05T09:56:00.000Z')
+          }
+        ])
+      )
+    };
 
     const service = new MonitoringService(
       {
@@ -180,37 +247,6 @@ describe('MonitoringService Cloudflare', () => {
         bumpSessionVersion: vi.fn()
       } as never,
       {
-        listAdminUsageLogs: vi
-          .fn()
-          .mockResolvedValueOnce({
-            items: [
-              {
-                userId: 7,
-                createdAt: '2026-04-05T09:55:00.000Z',
-                ipAddress: '152.53.88.113',
-                user: {
-                  id: 7,
-                  email: 'u7@example.com',
-                  username: 'u7',
-                  role: 'user',
-                  status: 'active'
-                }
-              },
-              {
-                userId: 8,
-                createdAt: '2026-04-05T09:56:00.000Z',
-                ipAddress: '38.14.250.69',
-                user: {
-                  id: 8,
-                  email: 'u8@example.com',
-                  username: 'u8',
-                  role: 'user',
-                  status: 'active'
-                }
-              }
-            ],
-            pages: 1
-          }),
         getAdminUserById: vi.fn(),
         updateAdminUserStatus: vi.fn()
       } as never,
@@ -224,7 +260,8 @@ describe('MonitoringService Cloudflare', () => {
         isConfigured: vi.fn().mockReturnValue(false),
         getDisabledReason: vi.fn().mockReturnValue('未配置 Cloudflare')
       } as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const result = await service.listIps({
@@ -239,6 +276,23 @@ describe('MonitoringService Cloudflare', () => {
 
   it('检测到外部 Cloudflare 规则时禁止面板覆盖', async () => {
     const { MonitoringService } = await import('./monitoring-service.js');
+    const usageAnalysis = {
+      getSnapshot: vi.fn().mockResolvedValue(
+        buildUsageSnapshot([
+          {
+            userId: 7,
+            email: 'u7@example.com',
+            username: 'u7',
+            linuxdoSubject: null,
+            role: 'user',
+            status: 'active',
+            ipAddress: '1.1.1.1',
+            createdAt: '2026-04-05T09:55:00.000Z',
+            createdAtMs: Date.parse('2026-04-05T09:55:00.000Z')
+          }
+        ])
+      )
+    };
 
     const service = new MonitoringService(
       {
@@ -255,23 +309,6 @@ describe('MonitoringService Cloudflare', () => {
         bumpSessionVersion: vi.fn()
       } as never,
       {
-        listAdminUsageLogs: vi.fn().mockResolvedValue({
-          items: [
-            {
-              userId: 7,
-              createdAt: '2026-04-05T09:55:00.000Z',
-              ipAddress: '1.1.1.1',
-              user: {
-                id: 7,
-                email: 'u7@example.com',
-                username: 'u7',
-                role: 'user',
-                status: 'active'
-              }
-            }
-          ],
-          pages: 1
-        }),
         getAdminUserById: vi.fn(),
         updateAdminUserStatus: vi.fn()
       } as never,
@@ -296,7 +333,8 @@ describe('MonitoringService Cloudflare', () => {
           }
         ])
       } as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const result = await service.getIpCloudflareStatus('1.1.1.1');
@@ -328,40 +366,38 @@ describe('MonitoringService Cloudflare', () => {
       listAdminWhitelist: vi.fn().mockResolvedValue([])
     };
     const sub2api = {
-      listAdminUsageLogs: vi.fn().mockResolvedValue({
-        items: [
-          {
-            userId: 7,
-            createdAt: '2026-04-05T09:55:00.000Z',
-            ipAddress: '152.53.88.113',
-            user: {
-              id: 7,
-              email: 'u7@example.com',
-              username: 'u7',
-              role: 'user',
-              status: 'active'
-            }
-          },
-          {
-            userId: 8,
-            createdAt: '2026-04-05T09:57:00.000Z',
-            ipAddress: '8.8.8.8',
-            user: {
-              id: 8,
-              email: 'u8@example.com',
-              username: 'u8',
-              role: 'user',
-              status: 'active'
-            }
-          }
-        ],
-        total: 2,
-        page: 1,
-        pageSize: 200,
-        pages: 1
-      }),
       getAdminUserById: vi.fn(),
       updateAdminUserStatus: vi.fn()
+    };
+    const usageAnalysis = {
+      getSnapshot: vi
+        .fn()
+        .mockResolvedValue(
+          buildUsageSnapshot([
+            {
+              userId: 7,
+              email: 'u7@example.com',
+              username: 'u7',
+              linuxdoSubject: null,
+              role: 'user',
+              status: 'active',
+              ipAddress: '152.53.88.113',
+              createdAt: '2026-04-05T09:55:00.000Z',
+              createdAtMs: Date.parse('2026-04-05T09:55:00.000Z')
+            },
+            {
+              userId: 8,
+              email: 'u8@example.com',
+              username: 'u8',
+              linuxdoSubject: null,
+              role: 'user',
+              status: 'active',
+              ipAddress: '8.8.8.8',
+              createdAt: '2026-04-05T09:57:00.000Z',
+              createdAtMs: Date.parse('2026-04-05T09:57:00.000Z')
+            }
+          ])
+        )
     };
 
     const service = new MonitoringService(
@@ -380,7 +416,8 @@ describe('MonitoringService Cloudflare', () => {
         getDisabledReason: vi.fn().mockReturnValue(''),
         listIpAccessRules: vi.fn()
       } as never,
-      console
+      console,
+      usageAnalysis as never
     );
 
     const firstPage = await service.listIps({
@@ -396,7 +433,7 @@ describe('MonitoringService Cloudflare', () => {
     expect(firstPage.items).toHaveLength(1);
     expect(firstPage.items[0]?.ipAddress).toBe('152.53.88.113');
     expect(usersPage.total).toBe(2);
-    expect(sub2api.listAdminUsageLogs).toHaveBeenCalledTimes(1);
+    expect(usageAnalysis.getSnapshot).toHaveBeenCalledTimes(1);
     expect(riskRepository.listRiskEventsForStatuses).toHaveBeenCalledTimes(1);
     expect(welfare.listAdminWhitelist).toHaveBeenCalledTimes(1);
 
@@ -419,6 +456,6 @@ describe('MonitoringService Cloudflare', () => {
       pageSize: 10
     });
 
-    expect(sub2api.listAdminUsageLogs).toHaveBeenCalledTimes(2);
+    expect(usageAnalysis.getSnapshot).toHaveBeenCalledTimes(2);
   });
 });

@@ -115,6 +115,8 @@ const configSchema = z.object({
   WELFARE_MONITOR_LOCK_DURATION: z.string().default('24h'),
   WELFARE_MONITOR_LIVE_CACHE_TTL: z.string().default('30s'),
   WELFARE_MONITOR_SNAPSHOT_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  WELFARE_USAGE_SYNC_INTERVAL: z.string().default('5m'),
+  WELFARE_USAGE_CACHE_RETENTION: z.string().default('48h'),
   WELFARE_RATE_LIMIT_AUTH_WINDOW: z.string().default('10m'),
   WELFARE_RATE_LIMIT_AUTH_LIMIT: z.coerce.number().int().positive().default(20),
   WELFARE_RATE_LIMIT_CHECKIN_WINDOW: z.string().default('5m'),
@@ -171,6 +173,14 @@ const monitorLockDurationMs = parseDurationMs(
 const monitorLiveCacheTtlMs = parseDurationMs(
   raw.WELFARE_MONITOR_LIVE_CACHE_TTL,
   'WELFARE_MONITOR_LIVE_CACHE_TTL'
+);
+const usageSyncIntervalMs = parseDurationMs(
+  raw.WELFARE_USAGE_SYNC_INTERVAL,
+  'WELFARE_USAGE_SYNC_INTERVAL'
+);
+const usageCacheRetentionMs = parseDurationMs(
+  raw.WELFARE_USAGE_CACHE_RETENTION,
+  'WELFARE_USAGE_CACHE_RETENTION'
 );
 const authRateLimitWindowMs = parseDurationMs(
   raw.WELFARE_RATE_LIMIT_AUTH_WINDOW,
@@ -256,6 +266,8 @@ export const config = {
   WELFARE_MONITOR_SNAPSHOT_INTERVAL_MS: monitorSnapshotIntervalMs,
   WELFARE_MONITOR_LOCK_DURATION_MS: monitorLockDurationMs,
   WELFARE_MONITOR_LIVE_CACHE_TTL_MS: monitorLiveCacheTtlMs,
+  WELFARE_USAGE_SYNC_INTERVAL_MS: usageSyncIntervalMs,
+  WELFARE_USAGE_CACHE_RETENTION_MS: usageCacheRetentionMs,
   WELFARE_RATE_LIMIT_AUTH_WINDOW_MS: authRateLimitWindowMs,
   WELFARE_RATE_LIMIT_CHECKIN_WINDOW_MS: checkinRateLimitWindowMs,
   WELFARE_RATE_LIMIT_REDEEM_WINDOW_MS: redeemRateLimitWindowMs,

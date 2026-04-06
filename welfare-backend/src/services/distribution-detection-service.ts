@@ -2,15 +2,19 @@ import { config } from '../config.js';
 import { pool } from '../db.js';
 import { RiskRepository, type SaveRiskEventInput } from '../repositories/risk-repository.js';
 import { WelfareRepository } from '../repositories/welfare-repository.js';
-import type { RiskEvent, RiskEventStatus, RiskScanState, SessionUser } from '../types/domain.js';
+import type {
+  RiskBand,
+  RiskEvent,
+  RiskEventStatus,
+  RiskRuleHit,
+  RiskScanState,
+  SessionUser
+} from '../types/domain.js';
 import { extractLinuxDoSubjectFromEmail } from '../utils/oauth.js';
 import { sessionStateService, SessionStateService } from './session-state-service.js';
-import {
-  sub2apiClient,
-  Sub2apiClient,
-  type AdminUsageLogRecord,
-  type AdminUserRecord
-} from './sub2api-client.js';
+import { sub2apiClient, Sub2apiClient, type AdminUserRecord } from './sub2api-client.js';
+import { buildUserRuleHits, riskBandFromScore, scoreRiskHits } from './monitoring-rules.js';
+import { usageAnalysisService, type EffectiveUsageEntry, type UsageAnalysisService } from './usage-analysis-service.js';
 
 export const DISTRIBUTION_WINDOW_MS = 60 * 60 * 1000;
 export const DISTRIBUTION_OBSERVE_IP_THRESHOLD = config.WELFARE_MONITOR_OBSERVE_IP_THRESHOLD;
@@ -25,7 +29,6 @@ export const DISTRIBUTION_WINDOW_STATS = {
   window24h: 24 * 60 * 60 * 1000
 } as const;
 
-const DISTRIBUTION_USAGE_PAGE_SIZE = 200;
 const MAX_IP_SAMPLE_COUNT = 10;
 
 type ScanSource = 'scheduled' | 'manual' | 'auth';
@@ -53,15 +56,11 @@ interface DistributionSignal {
   user: AdminUserRecord;
   ipSamples: string[];
   distinctIpCount: number;
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   firstHitAt: string;
   lastHitAt: string;
-}
-
-interface SignalAggregate {
-  user: AdminUserRecord | null;
-  ipSet: Set<string>;
-  firstHitAt: string | null;
-  lastHitAt: string | null;
 }
 
 export interface RiskOverview {
@@ -90,17 +89,11 @@ export interface RiskObservation {
   window6hIpCount: number;
   window24hIpCount: number;
   ipSamples: string[];
+  riskScore: number;
+  riskBand: RiskBand;
+  ruleHits: RiskRuleHit[];
   firstHitAt: string;
   lastHitAt: string;
-}
-
-interface ObservationAggregate {
-  user: AdminUserRecord | null;
-  entries: Array<{
-    ip: string;
-    createdAt: string;
-    createdAtMs: number;
-  }>;
 }
 
 interface ObservationWindowStats {
@@ -234,6 +227,16 @@ function normalizeUserStatus(value: string | undefined): string {
   return normalized === '' ? 'active' : normalized;
 }
 
+function toAdminUserRecord(entry: EffectiveUsageEntry): AdminUserRecord {
+  return {
+    id: entry.userId,
+    email: entry.email,
+    username: entry.username,
+    role: entry.role,
+    status: normalizeUserStatus(entry.status) === 'disabled' ? 'disabled' : 'active'
+  };
+}
+
 export class RiskAccessDeniedError extends Error {
   constructor(readonly event: RiskEvent, detail: string) {
     super(detail);
@@ -262,8 +265,10 @@ type WelfareRepositoryLike = Pick<
 
 type Sub2apiClientLike = Pick<
   Sub2apiClient,
-  'getAdminUserById' | 'listAdminUsageLogs' | 'updateAdminUserStatus'
+  'getAdminUserById' | 'updateAdminUserStatus'
 >;
+
+type UsageAnalysisServiceLike = Pick<UsageAnalysisService, 'getSnapshot'>;
 
 export class DistributionDetectionService {
   private runningScan: Promise<{
@@ -286,7 +291,8 @@ export class DistributionDetectionService {
     >,
     private readonly sub2api: Sub2apiClientLike,
     private readonly welfare: WelfareRepositoryLike,
-    private readonly logger: LoggerLike
+    private readonly logger: LoggerLike,
+    private readonly usageAnalysis: UsageAnalysisServiceLike = usageAnalysisService
   ) {}
 
   startScanLoop(intervalMs = DISTRIBUTION_SCAN_INTERVAL_MS): NodeJS.Timeout {
@@ -552,11 +558,11 @@ export class DistributionDetectionService {
     await this.repository.markRiskScanStarted(source, startedAt);
 
     try {
-      const [usageLogs, whitelist] = await Promise.all([
-        this.listUsageLogsForWindow({ userId: undefined }),
+      const [usageEntries, whitelist] = await Promise.all([
+        this.listUsageEntries({ windowMs: DISTRIBUTION_WINDOW_MS }),
         this.welfare.listAdminWhitelist()
       ]);
-      const signals = await this.extractSignalsFromUsageLogs(usageLogs, whitelist);
+      const signals = this.extractSignalsFromEntries(usageEntries, whitelist);
 
       let createdEventCount = 0;
       let refreshedEventCount = 0;
@@ -580,13 +586,13 @@ export class DistributionDetectionService {
         source,
         finishedAt,
         error: '',
-        scannedUserCount: usageLogs.length,
+        scannedUserCount: usageEntries.length,
         hitUserCount: signals.length
       });
       const lastScan = await this.repository.getRiskScanState();
 
       return {
-        scannedLogCount: usageLogs.length,
+        scannedLogCount: usageEntries.length,
         matchedUserCount: signals.length,
         createdEventCount,
         refreshedEventCount,
@@ -616,8 +622,11 @@ export class DistributionDetectionService {
     whitelist: Awaited<ReturnType<WelfareRepositoryLike['listAdminWhitelist']>>,
     source: string
   ): Promise<RiskEvent | null> {
-    const usageLogs = await this.listUsageLogsForWindow({ userId: sub2apiUserId });
-    const signals = await this.extractSignalsFromUsageLogs(usageLogs, whitelist, user);
+    const usageEntries = await this.listUsageEntries({
+      userId: sub2apiUserId,
+      windowMs: DISTRIBUTION_WINDOW_MS
+    });
+    const signals = this.extractSignalsFromEntries(usageEntries, whitelist, user);
     const signal = signals.find((item) => item.userId === sub2apiUserId);
     if (!signal) {
       return null;
@@ -627,93 +636,77 @@ export class DistributionDetectionService {
     return result.event;
   }
 
-  private async listUsageLogsForWindow(params: {
+  private async listUsageEntries(params: {
     userId?: number;
     windowMs?: number;
-  }): Promise<AdminUsageLogRecord[]> {
-    const now = new Date();
+  }): Promise<EffectiveUsageEntry[]> {
+    const nowMs = Date.now();
     const windowMs = params.windowMs ?? DISTRIBUTION_WINDOW_MS;
-    const windowStart = new Date(now.getTime() - windowMs);
-    const startDate = toDateOnly(windowStart);
-    const endDate = toDateOnly(now);
+    const cutoffMs = nowMs - windowMs;
+    const snapshot = await this.usageAnalysis.getSnapshot();
 
-    const items: AdminUsageLogRecord[] = [];
-    let page = 1;
-    let totalPages = 1;
-
-    while (page <= totalPages) {
-      const result = await this.sub2api.listAdminUsageLogs({
-        page,
-        pageSize: DISTRIBUTION_USAGE_PAGE_SIZE,
-        startDate,
-        endDate,
-        timezone: 'UTC',
-        exactTotal: true,
-        userId: params.userId
-      });
-      items.push(...result.items);
-      totalPages = Math.max(1, result.pages);
-      if (result.items.length === 0) {
-        break;
-      }
-      page += 1;
-    }
-
-    return items.filter((item) => {
-      const createdAtMs = Date.parse(item.createdAt);
-      if (Number.isNaN(createdAtMs)) {
-        return false;
-      }
-      return createdAtMs >= windowStart.getTime() && createdAtMs <= now.getTime();
-    });
+    return snapshot.entries.filter(
+      (entry) =>
+        entry.createdAtMs >= cutoffMs &&
+        entry.createdAtMs <= nowMs &&
+        (params.userId == null || entry.userId === params.userId)
+    );
   }
 
-  private async extractSignalsFromUsageLogs(
-    usageLogs: AdminUsageLogRecord[],
+  private extractSignalsFromEntries(
+    usageEntries: EffectiveUsageEntry[],
     whitelist: Awaited<ReturnType<WelfareRepositoryLike['listAdminWhitelist']>>,
     fallbackUser?: AdminUserRecord
-  ): Promise<DistributionSignal[]> {
-    const grouped = new Map<number, SignalAggregate>();
+  ): DistributionSignal[] {
+    const grouped = new Map<
+      number,
+      {
+        user: AdminUserRecord;
+        ipSet: Set<string>;
+        firstHitAt: string | null;
+        lastHitAt: string | null;
+      }
+    >();
 
-    for (const item of usageLogs) {
+    for (const entry of usageEntries) {
       const target =
-        grouped.get(item.userId) ??
+        grouped.get(entry.userId) ??
         {
-          user: null,
+          user:
+            fallbackUser?.id === entry.userId ? fallbackUser : toAdminUserRecord(entry),
           ipSet: new Set<string>(),
           firstHitAt: null,
           lastHitAt: null
         };
 
-      target.user =
-        target.user ??
-        item.user ??
-        (fallbackUser?.id === item.userId ? fallbackUser : null);
+      target.ipSet.add(entry.ipAddress);
 
-      const ip = normalizeIp(item.ipAddress);
-      if (ip) {
-        target.ipSet.add(ip);
-
-        if (!target.firstHitAt || Date.parse(item.createdAt) < Date.parse(target.firstHitAt)) {
-          target.firstHitAt = item.createdAt;
-        }
-        if (!target.lastHitAt || Date.parse(item.createdAt) > Date.parse(target.lastHitAt)) {
-          target.lastHitAt = item.createdAt;
-        }
+      if (!target.firstHitAt || entry.createdAtMs < Date.parse(target.firstHitAt)) {
+        target.firstHitAt = entry.createdAt;
+      }
+      if (!target.lastHitAt || entry.createdAtMs > Date.parse(target.lastHitAt)) {
+        target.lastHitAt = entry.createdAt;
       }
 
-      grouped.set(item.userId, target);
+      grouped.set(entry.userId, target);
     }
 
     const signals: DistributionSignal[] = [];
     for (const [userId, value] of grouped) {
-      const user = value.user ?? (fallbackUser?.id === userId ? fallbackUser : null);
-      if (!user) {
-        continue;
-      }
+      const user = value.user;
       if (this.isExemptUser(user, whitelist)) {
         continue;
       }
+      const ruleHits = buildUserRuleHits({
+        uniqueIpCount1h: value.ipSet.size,
+        uniqueIpCount3h: value.ipSet.size,
+        uniqueIpCount6h: value.ipSet.size,
+        uniqueIpCount24h: value.ipSet.size,
+        observeThreshold: DISTRIBUTION_OBSERVE_IP_THRESHOLD,
+        blockThreshold: DISTRIBUTION_BAN_IP_THRESHOLD
+      });
+      const riskScore = scoreRiskHits(ruleHits);
+      const riskBand = riskBandFromScore(riskScore);
       if (value.ipSet.size < DISTRIBUTION_BAN_IP_THRESHOLD) {
         continue;
       }
@@ -723,6 +716,9 @@ export class DistributionDetectionService {
         user,
         ipSamples: Array.from(value.ipSet).sort().slice(0, MAX_IP_SAMPLE_COUNT),
         distinctIpCount: value.ipSet.size,
+        riskScore,
+        riskBand,
+        ruleHits,
         firstHitAt: value.firstHitAt ?? nowIso(),
         lastHitAt: value.lastHitAt ?? nowIso()
       });
@@ -792,6 +788,9 @@ export class DistributionDetectionService {
         windowEndedAt: scanAt,
         distinctIpCount: signal.distinctIpCount,
         ipSamples: signal.ipSamples,
+        riskScore: signal.riskScore,
+        riskBand: signal.riskBand,
+        ruleHits: signal.ruleHits,
         firstHitAt: signal.firstHitAt,
         lastHitAt: signal.lastHitAt,
         minimumLockUntil,
@@ -871,41 +870,20 @@ export class DistributionDetectionService {
 
   private async listObservationCandidates(): Promise<RiskObservation[]> {
     const whitelist = await this.welfare.listAdminWhitelist();
-    const usageLogs = await this.listUsageLogsForWindow({
+    const usageEntries = await this.listUsageEntries({
       windowMs: DISTRIBUTION_WINDOW_STATS.window24h
     });
-    const grouped = new Map<number, ObservationAggregate>();
+    const grouped = new Map<number, EffectiveUsageEntry[]>();
 
-    for (const item of usageLogs) {
-      const createdAtMs = Date.parse(item.createdAt);
-      const ip = normalizeIp(item.ipAddress);
-      if (
-        !Number.isInteger(item.userId) ||
-        item.userId <= 0 ||
-        Number.isNaN(createdAtMs) ||
-        !ip
-      ) {
-        continue;
-      }
-
-      const current =
-        grouped.get(item.userId) ??
-        {
-          user: null,
-          entries: []
-        };
-      current.user = current.user ?? item.user ?? null;
-      current.entries.push({
-        ip,
-        createdAt: item.createdAt,
-        createdAtMs
-      });
-      grouped.set(item.userId, current);
-    }
+    usageEntries.forEach((entry) => {
+      const current = grouped.get(entry.userId) ?? [];
+      current.push(entry);
+      grouped.set(entry.userId, current);
+    });
 
     const observations: RiskObservation[] = [];
-    for (const [userId, aggregate] of grouped) {
-      const windowStats = this.computeObservationWindowStats(aggregate.entries);
+    for (const [userId, entries] of grouped) {
+      const windowStats = this.computeObservationWindowStats(entries);
       if (
         windowStats.window1hIpCount < DISTRIBUTION_OBSERVE_IP_THRESHOLD &&
         windowStats.window3hIpCount < DISTRIBUTION_OBSERVE_IP_THRESHOLD &&
@@ -915,13 +893,25 @@ export class DistributionDetectionService {
         continue;
       }
 
-      const user = await this.resolveObservationUser(userId, aggregate.user);
+      const snapshot = entries[0];
+      const user = snapshot ? toAdminUserRecord(snapshot) : null;
       if (!user || this.isExemptUser(user, whitelist)) {
         continue;
       }
 
+      const ruleHits = buildUserRuleHits({
+        uniqueIpCount1h: windowStats.window1hIpCount,
+        uniqueIpCount3h: windowStats.window3hIpCount,
+        uniqueIpCount6h: windowStats.window6hIpCount,
+        uniqueIpCount24h: windowStats.window24hIpCount,
+        observeThreshold: DISTRIBUTION_OBSERVE_IP_THRESHOLD,
+        blockThreshold: DISTRIBUTION_BAN_IP_THRESHOLD
+      });
+      const riskScore = scoreRiskHits(ruleHits);
+      const riskBand = riskBandFromScore(riskScore);
+
       observations.push({
-        sub2apiUserId: user.id,
+        sub2apiUserId: userId,
         sub2apiEmail: user.email,
         sub2apiUsername: user.username || user.email,
         linuxdoSubject: extractLinuxDoSubjectFromEmail(user.email),
@@ -932,6 +922,9 @@ export class DistributionDetectionService {
         window6hIpCount: windowStats.window6hIpCount,
         window24hIpCount: windowStats.window24hIpCount,
         ipSamples: windowStats.ipSamples,
+        riskScore,
+        riskBand,
+        ruleHits,
         firstHitAt: windowStats.firstHitAt ?? nowIso(),
         lastHitAt: windowStats.lastHitAt ?? nowIso()
       });
@@ -979,19 +972,8 @@ export class DistributionDetectionService {
     }
   }
 
-  private async resolveObservationUser(
-    userId: number,
-    snapshot: AdminUserRecord | null
-  ): Promise<AdminUserRecord | null> {
-    if (snapshot?.email && snapshot.role && snapshot.status) {
-      return snapshot;
-    }
-
-    return this.sub2api.getAdminUserById(userId);
-  }
-
   private computeObservationWindowStats(
-    entries: ObservationAggregate['entries']
+    entries: EffectiveUsageEntry[]
   ): ObservationWindowStats {
     const nowMs = Date.now();
     const oneHourCutoff = nowMs - DISTRIBUTION_WINDOW_STATS.window1h;
@@ -1008,16 +990,16 @@ export class DistributionDetectionService {
 
     for (const entry of entries) {
       if (entry.createdAtMs >= twentyFourHourCutoff) {
-        twentyFourHourIps.add(entry.ip);
+        twentyFourHourIps.add(entry.ipAddress);
       }
       if (entry.createdAtMs >= sixHourCutoff) {
-        sixHourIps.add(entry.ip);
+        sixHourIps.add(entry.ipAddress);
       }
       if (entry.createdAtMs >= threeHourCutoff) {
-        threeHourIps.add(entry.ip);
+        threeHourIps.add(entry.ipAddress);
       }
       if (entry.createdAtMs >= oneHourCutoff) {
-        oneHourIps.add(entry.ip);
+        oneHourIps.add(entry.ipAddress);
         if (!firstHitAt || entry.createdAtMs < Date.parse(firstHitAt)) {
           firstHitAt = entry.createdAt;
         }
@@ -1121,5 +1103,6 @@ export const distributionDetectionService = new DistributionDetectionService(
   sessionStateService,
   sub2apiClient,
   new WelfareRepository(pool),
-  console
+  console,
+  usageAnalysisService
 );
